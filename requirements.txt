@@ -1,0 +1,9 @@
+matplotlib==3.10.8
+numpy==2.4.1
+pandas==3.0.0
+pennylane==0.45.1
+pennylane-lightning==0.45.0
+pylatexenc==2.10
+qiskit==2.4.1
+scikit-learn==1.8.0
+scipy==1.17.0
