@@ -78,6 +78,16 @@ def save_fig(fig, name: str, formats: tuple[str, ...] = ()) -> str:
     return paths[0]
 
 
+def show(fig) -> None:
+    import matplotlib.pyplot as plt
+
+    interactive = mpl.get_backend().lower() not in ("agg", "pdf", "svg", "ps")
+    if "--no-show" in sys.argv or not interactive:
+        plt.close(fig)
+        return
+    plt.show()
+
+
 def write_csv(name: str, rows: list[dict]) -> str:
     ensure_dirs()
     path = os.path.join(RESULTS_DIR, name)
@@ -182,7 +192,7 @@ __all__ = [
     "BASELINE", "BLUE", "GRID", "INK", "INK2", "MUTED", "RED",
     "BALANCE_WEIGHTS", "PRODUCTION_WEIGHTS", "RIDGE_ALPHA",
     "RESULTS_DIR", "REPORT_FIG_DIR", "REPO_DIR",
-    "ensure_dirs", "report_style", "save_fig", "write_csv", "read_csv",
+    "ensure_dirs", "report_style", "save_fig", "show", "write_csv", "read_csv",
     "FIG_FORMATS", "FIG_DPI",
     "write_meta", "git_hash", "catalog_size", "space_size",
     "sine_split", "mof_split", "REFERENCE_SCALE", "BOUND_SIGMAS",
