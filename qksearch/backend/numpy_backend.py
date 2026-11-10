@@ -4,7 +4,7 @@ from typing import Optional
 
 import numpy as np
 
-from qksearch.gates import IDENTITY_NAME, PHASE_POWERS, GateOp, State
+from qksearch.gates import HADAMARD_LAYER_NAME, IDENTITY_NAME, PHASE_POWERS, GateOp, State
 
 from .base import _unit_diagonal, feature_angles
 
@@ -91,6 +91,10 @@ class NumpyBackend:
 
         if name == "h":
             return self._apply_1q(psi, _H, qubits[0])
+        if name == HADAMARD_LAYER_NAME:
+            for q in range(self.n_qubits):
+                psi = self._apply_1q(psi, _H, q)
+            return psi
         if name == "cx":
             return psi[:, self._permutation(qubits[0], qubits[1])]
         if name in ("rx", "ry"):

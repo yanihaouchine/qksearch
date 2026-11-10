@@ -11,6 +11,9 @@ State = tuple[GateOp, ...]
 IDENTITY_NAME = "id"
 IDENTITY_OP: GateOp = (IDENTITY_NAME, (), None)
 
+HADAMARD_LAYER_NAME = "hl"
+HADAMARD_LAYER_OP: GateOp = (HADAMARD_LAYER_NAME, (), None)
+
 PHASE_POWERS: dict[str, tuple[int, int]] = {
     "t": (1, 1), "s": (1, 2), "t3": (1, 3), "z": (1, 4),
     "t5": (1, 5), "sdg": (1, 6), "tdg": (1, 7),
@@ -139,6 +142,39 @@ class ProductGateSet:
         while i > 0 and self._rank.get(state[i - 1], -1) > rank:
             i -= 1
         return state[:i] + (op,) + state[i:]
+
+
+class LayeredGateSet:
+    def __init__(self, base: ProductGateSet, max_layers: int) -> None:
+        if max_layers < 1:
+            raise ValueError("max_layers must be >= 1")
+        if not base.canonical:
+            raise ValueError("base gate set must be canonical (diagonal)")
+        self.base = base
+        self.max_layers = max_layers
+        self.n_qubits = base.n_qubits
+        self.n_features = base.n_features
+        self.n_active = base.n_active
+        self._catalog = base.catalog + ((HADAMARD_LAYER_OP,) if max_layers > 1 else ())
+
+    @property
+    def catalog(self) -> tuple[GateOp, ...]:
+        return self._catalog
+
+    def placements(self, state: State) -> Sequence[GateOp]:
+        if not state or state[-1] == HADAMARD_LAYER_OP:
+            return self.base.catalog
+        ops = tuple(self.base.placements(state))
+        if state.count(HADAMARD_LAYER_OP) < self.max_layers - 1:
+            ops += (HADAMARD_LAYER_OP,)
+        return ops
+
+    def insert(self, state: State, op: GateOp) -> State:
+        return state + (op,)
+
+
+def layer_count(state: State) -> int:
+    return 1 + sum(op == HADAMARD_LAYER_OP for op in state)
 
 
 def phase_power_specs() -> list[GateSpec]:

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from itertools import combinations
 
+import numpy as np
+
 from qksearch.gates import State
 
 _AXES = {"rx": "X", "ry": "Y", "rz": "Z",
@@ -32,25 +34,40 @@ def is_abelian(gens: frozenset[Generator]) -> bool:
     return all(commute(g1, g2) for g1, g2 in combinations(gens, 2))
 
 
+_SYMPLECTIC = {"X": (1, 0), "Y": (1, 1), "Z": (0, 1)}
+
+
+def symplectic(gen: Generator) -> tuple[int, int]:
+    x = z = 0
+    for axis, qubit in gen:
+        bx, bz = _SYMPLECTIC[axis]
+        x ^= bx << qubit
+        z ^= bz << qubit
+    return x, z
+
+
+def pauli_closure(gens: frozenset[Generator]) -> set[tuple[int, int]]:
+    codes = np.array(sorted({symplectic(g) for g in gens}), dtype=np.int64)
+    n_qubits = max(int(codes.max()).bit_length(), 1)
+    seen = np.zeros(1 << (2 * n_qubits), dtype=bool)
+    seen[codes[:, 0] | (codes[:, 1] << n_qubits)] = True
+    closure, frontier = codes, codes
+    while len(frontier):
+        anti = np.bitwise_count((frontier[:, None, 0] & closure[None, :, 1])
+                                ^ (frontier[:, None, 1] & closure[None, :, 0])) & 1
+        f, c = np.nonzero(anti)
+        products = frontier[f] ^ closure[c]
+        keys = np.unique(products[:, 0] | (products[:, 1] << n_qubits))
+        keys = keys[~seen[keys]]
+        seen[keys] = True
+        frontier = np.stack([keys & ((1 << n_qubits) - 1), keys >> n_qubits], axis=1)
+        closure = np.concatenate([closure, frontier])
+    return {(int(x), int(z)) for x, z in closure}
+
+
 class DlaCalculator:
     def __init__(self) -> None:
-        self._qml = None
         self._cache: dict[frozenset[Generator], int] = {}
-
-    def _pennylane(self):
-        if self._qml is None:
-            import pennylane as qml
-
-            self._qml = qml
-        return self._qml
-
-    def _operator(self, gen: Generator):
-        qml = self._pennylane()
-        paulis = {"X": qml.X, "Y": qml.Y, "Z": qml.Z}
-        op = paulis[gen[0][0]](gen[0][1])
-        for axis, qubit in gen[1:]:
-            op = op @ paulis[axis](qubit)
-        return op
 
     def dimension(self, state: State) -> int:
         return self.dimension_of(state_generators(state))
@@ -61,7 +78,6 @@ class DlaCalculator:
         cached = self._cache.get(gens)
         if cached is not None:
             return cached
-        dim = (len(gens) if is_abelian(gens)
-               else len(self._pennylane().lie_closure([self._operator(g) for g in gens])))
+        dim = len(gens) if is_abelian(gens) else len(pauli_closure(gens))
         self._cache[gens] = dim
         return dim

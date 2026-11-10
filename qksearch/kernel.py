@@ -153,7 +153,7 @@ class CircuitEvaluator:
             self._psi.popitem(last=False)
         return psi
 
-    def _final_states(self, state: State) -> np.ndarray:
+    def final_states(self, state: State) -> np.ndarray:
         psi = self.states(state)
         if not self.suffix:
             return psi
@@ -170,7 +170,7 @@ class CircuitEvaluator:
 
     def gram(self, state: State) -> np.ndarray:
         if self._incremental:
-            return self.backend.gram_from_states(self._final_states(state))
+            return self.backend.gram_from_states(self.final_states(state))
         return self.backend.gram(self.circuit(state), self.data.X)
 
     def kta(self, state: State) -> float:
@@ -209,7 +209,7 @@ class CircuitEvaluator:
                 out[i] = self.kta(states[i])
             return out
 
-        psis = np.stack([self._final_states(states[i]) for i in pending])
+        psis = np.stack([self.final_states(states[i]) for i in pending])
         grams = self.backend.gram_batch(psis)
         values = self.metric.batch(grams, self.data.y)
         feats = None if self.gram_feature is None else self.gram_feature.batch(grams)

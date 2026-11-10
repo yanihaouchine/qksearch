@@ -304,18 +304,28 @@ def test_extra_qubits_ignored() -> None:
             assert abs(h.score(s) - ref.score(s)) < TOL, (n_qubits, s)
 
 
+def _pennylane_operator(gen):
+    import pennylane as qml
+
+    paulis = {"X": qml.X, "Y": qml.Y, "Z": qml.Z}
+    op = paulis[gen[0][0]](gen[0][1])
+    for axis, qubit in gen[1:]:
+        op = op @ paulis[axis](qubit)
+    return op
+
+
 def test_abelian_dla_matches_lie_closure() -> None:
     import pennylane as qml
 
     dla = DlaCalculator()
     seen = {True: 0, False: 0}
-    for n in (2, 3):
+    for n in (2, 3, 4):
         for gs in (iqp_gate_set(n, n), pauli_gate_set(n, n)):
             for state in _random_states(list(gs.placements(())), 12, 7, seed=n):
                 full = hadamard_layer(n) + state
                 gens = state_generators(full)
                 seen[is_abelian(gens)] += 1
-                ref = len(qml.lie_closure([DlaCalculator()._operator(g) for g in gens]))
+                ref = len(qml.lie_closure([_pennylane_operator(g) for g in gens]))
                 assert dla.dimension(full) == ref, full
     assert seen[True] and seen[False], "one of the two paths was never exercised"
 
