@@ -17,6 +17,7 @@ FILTER_WEIGHT = 100.0
 CIRCUIT_METHOD = "l2pf"
 CIRCUIT_SEED = 6
 ALPHAS = tuple(np.logspace(-4, 1, 16))
+RFF_FEATURES = 512
 
 OBJECTIVES = {
     "kta": ("KTA", common.BLUE),
@@ -33,6 +34,7 @@ CATEGORIES = {
     "product": ("product", common.BASELINE),
     "iqp": ("IQP", "#86b6ef"),
     "matchgate": ("matchgate", "#104281"),
+    "rff": ("RFF", "#5a9e6f"),
     "none": ("no certificate", "#e8a33d"),
 }
 
@@ -97,22 +99,34 @@ def magic(states, train) -> np.ndarray:
                      for s in states])
 
 
+def _ridge(grams: np.ndarray, train, test) -> tuple[np.ndarray, ...]:
+    from qksearch.metric import RidgeLooMse
+
+    n = train.n_samples
+    K = grams[:, :n]
+    K[:, np.arange(n), np.arange(n)] = 1.0
+    errors = RidgeLooMse(alphas=ALPHAS).loo_mse(K, train.y)
+    best = errors.argmin(axis=1)
+    alpha = np.asarray(ALPHAS)[best]
+    coef = np.linalg.solve(K + alpha[:, None, None] * np.eye(n), train.y[:, None])
+    pred = (grams[:, n:] @ coef)[..., 0]
+    total = float(((test.y - test.y.mean()) ** 2).mean())
+    r2 = 1.0 - ((pred - test.y) ** 2).mean(axis=1) / total
+    return -errors.min(axis=1) / train.y.var(), alpha, r2
+
+
 def measure(states, train, test) -> dict[str, np.ndarray]:
     from qksearch.dataset import RegressionDataset
     from qksearch.iqp import hadamard_layer
-    from qksearch.metric import RidgeLooMse, TargetAlignment
-    from qksearch.simulability import certify
+    from qksearch.metric import TargetAlignment
+    from qksearch.simulability import certify, rff_gram
 
     joint = RegressionDataset(np.vstack([train.X, test.X]),
                               np.concatenate([train.y, test.y]))
     h = hadamard_layer(N_QUBITS)
     evaluator = _evaluator(joint, cache=512)
     alignment = TargetAlignment()
-    loo = RidgeLooMse(alphas=ALPHAS)
-    alphas = np.asarray(ALPHAS)
     n = train.n_samples
-    idx = np.arange(n)
-    total = float(((test.y - test.y.mean()) ** 2).mean())
 
     out = {name: np.empty(len(states)) for name in ("kta", "mse", "alpha", "r2_test")}
     for start in range(0, len(states), CHUNK_SIZE):
@@ -120,18 +134,18 @@ def measure(states, train, test) -> dict[str, np.ndarray]:
         psis = np.stack([evaluator.final_states(s) for s in states[block]])
         overlaps = psis @ psis[:, :n].conj().swapaxes(1, 2)
         grams = overlaps.real ** 2 + overlaps.imag ** 2
-        K = grams[:, :n]
-        K[:, idx, idx] = 1.0
-        out["kta"][block] = alignment.batch(K, train.y)
-        errors = loo.loo_mse(K, train.y)
-        best = errors.argmin(axis=1)
-        out["mse"][block] = -errors.min(axis=1) / train.y.var()
-        out["alpha"][block] = alphas[best]
-        ridge = alphas[best][:, None, None] * np.eye(n)
-        coef = np.linalg.solve(K + ridge, train.y[:, None])
-        pred = (grams[:, n:] @ coef)[..., 0]
-        out["r2_test"][block] = 1.0 - ((pred - test.y) ** 2).mean(axis=1) / total
+        out["kta"][block] = alignment.batch(grams[:, :n], train.y)
+        out["mse"][block], out["alpha"][block], out["r2_test"][block] = \
+            _ridge(grams, train, test)
     out["category"] = np.array([category(certify(h + s + h, N_QUBITS)) for s in states])
+    out["r2_rff"] = np.full(len(states), np.nan)
+    pending = np.flatnonzero(out["category"] == "none")
+    for start in range(0, len(pending), CHUNK_SIZE):
+        block = pending[start:start + CHUNK_SIZE]
+        rff = np.stack([rff_gram(states[i], joint.X, train.X, RFF_FEATURES) for i in block])
+        out["r2_rff"][block] = _ridge(rff, train, test)[2]
+    dequantized = out["r2_rff"] >= out["r2_test"]
+    out["category"][dequantized] = "rff"
     return out
 
 
@@ -173,6 +187,7 @@ def run(budget: int) -> None:
                 "loo_r2": float(1.0 + values["mse"][i]),
                 "alpha": float(values["alpha"][i]),
                 "r2_test": float(values["r2_test"][i]),
+                "r2_rff": float(values["r2_rff"][i]),
                 "magic": float(m2),
                 "n_gates": sum(op[0] != "hl" for op in best),
                 "n_layers": layer_count(best),
@@ -189,25 +204,29 @@ def run(budget: int) -> None:
 
     df = pd.DataFrame(rows)
     summary: dict[str, dict] = {}
-    print(f"\n{'':>10} {'cert%':>6} {'seen%':>6} {'R2':>7} {'magic':>6} {'gates':>6} {'layers':>6}")
+    print(f"\n{'':>10} {'cert%':>6} {'seen%':>6} {'R2':>7} {'RFF':>7} {'magic':>6} "
+          f"{'gates':>6} {'layers':>6}")
     for (objective, method), sub in df.groupby(["objective", "method"], sort=False):
         key = f"{objective}/{method}"
         summary[key] = {
             "certified": float((sub["certificate"] != "none").mean()),
             "visited_certified": float(1.0 - sub["visited_none"].mean()),
             "r2_test": float(sub["r2_test"].median()),
+            "r2_rff": float(sub["r2_rff"].median()),
             "magic": float(sub["magic"].median()),
             "n_gates": float(sub["n_gates"].median()),
             "n_layers": float(sub["n_layers"].median()),
         }
         s = summary[key]
         print(f"{key:>10} {100 * s['certified']:>6.0f} {100 * s['visited_certified']:>6.0f} "
-              f"{s['r2_test']:>+7.3f} {s['magic']:>6.2f} {s['n_gates']:>6.1f} "
+              f"{s['r2_test']:>+7.3f} {s['r2_rff']:>+7.3f} {s['magic']:>6.2f} "
+              f"{s['n_gates']:>6.1f} "
               f"{s['n_layers']:>6.1f}")
 
     common.write_meta("e18_simulability", time.time() - t0, seeds=SEEDS,
                       n_qubits=N_QUBITS, max_depth=MAX_DEPTH, budget=budget,
                       filter_weight=FILTER_WEIGHT, alphas=list(ALPHAS),
+                      rff_features=RFF_FEATURES,
                       summary=summary)
 
 
@@ -226,7 +245,9 @@ def _stacked(ax, shares: dict[str, list[float]]) -> None:
 def _strip(ax, df, column: str, colour: str) -> None:
     rng = np.random.default_rng(0)
     for i, method in enumerate(METHODS):
-        values = df[df["method"] == method][column].to_numpy(dtype=float)
+        values = df[df["method"] == method][column].dropna().to_numpy(dtype=float)
+        if not len(values):
+            continue
         ax.scatter(i + rng.uniform(-0.12, 0.12, len(values)), np.maximum(values, -1.0),
                    s=16, color=colour, alpha=0.75, lw=0)
         med = float(np.median(values))
@@ -243,8 +264,9 @@ def plot():
     common.report_style()
     df = common.read_csv(CSV)
 
-    fig, axes = plt.subplots(4, 2, figsize=(9.0, 10.0), sharey="row",
+    fig, axes = plt.subplots(5, 2, figsize=(9.0, 12.0), sharey="row",
                              gridspec_kw={"hspace": 0.18, "wspace": 0.08})
+    df["rff_gap"] = df["r2_rff"] - df["r2_test"]
     for col, (objective, (label, colour)) in enumerate(OBJECTIVES.items()):
         sub = df[df["objective"] == objective]
         selected = {name: [float((sub[sub["method"] == m]["certificate"] == name).mean())
@@ -255,11 +277,13 @@ def plot():
         _stacked(axes[1, col], visited)
         _strip(axes[2, col], sub, "r2_test", colour)
         axes[2, col].axhline(0.0, color=common.BASELINE, lw=0.8)
-        _strip(axes[3, col], sub, "magic", colour)
-        axes[3, col].set_xticklabels([m[0] for m in METHODS.values()], fontsize=7.5)
+        _strip(axes[3, col], sub, "rff_gap", colour)
+        axes[3, col].axhline(0.0, color=common.BASELINE, lw=0.8)
+        _strip(axes[4, col], sub, "magic", colour)
+        axes[4, col].set_xticklabels([m[0] for m in METHODS.values()], fontsize=7.5)
         axes[0, col].set_title(label, color=colour, fontsize=11, fontweight="bold")
 
-    for row, name in enumerate(("selected", "visited", "test $R^2$", "magic $M_2$")):
+    for row, name in enumerate(("selected", "visited", "test $R^2$", "RFF $-$ quantum", "magic $M_2$")):
         axes[row, 0].set_ylabel(name)
     axes[0, 1].legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), fontsize=8,
                       frameon=False)

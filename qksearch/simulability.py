@@ -6,8 +6,8 @@ from typing import Optional
 import numpy as np
 
 from qksearch.backend import NumpyBackend
-from qksearch.backend.base import feature_angles
-from qksearch.gates import HADAMARD_LAYER_NAME, IDENTITY_NAME, PHASE_POWERS, GateOp, State
+from qksearch.backend.base import ANGLE_ENCODERS, feature_angles
+from qksearch.gates import ANGLE_ENCODING, HADAMARD_LAYER_NAME, IDENTITY_NAME, PHASE_POWERS, GateOp, State
 
 ZZ_GATES = frozenset({"rzz", "rzzh", "rzzhn"})
 ROTATIONS = ZZ_GATES | {"rz", "rx"}
@@ -247,6 +247,41 @@ def classical_gram(circuit: State, X: np.ndarray, n_qubits: int,
         else:
             K *= _matchgate_gram(gates, X, k)
     return K
+
+
+Variable = tuple[str, tuple[int, ...]]
+
+
+def encoding_spectrum(circuit: State) -> dict[Variable, int]:
+    spectrum: dict[Variable, int] = {}
+    for name, _, f in circuit:
+        if f is not None:
+            key = (ANGLE_ENCODING.get(name, "prod"), tuple(f))
+            spectrum[key] = spectrum.get(key, 0) + 1
+    return spectrum
+
+
+def rff_frequencies(circuit: State, n_features: int,
+                    seed: int = 0) -> tuple[list[Variable], np.ndarray]:
+    spectrum = encoding_spectrum(circuit)
+    counts = np.array(list(spectrum.values()), dtype=int)
+    rng = np.random.default_rng(seed)
+    omegas = rng.binomial(2 * counts, 0.5, size=(n_features, counts.size)) - counts
+    return list(spectrum), omegas
+
+
+def _encoded(X: np.ndarray, variables: list[Variable]) -> np.ndarray:
+    columns = [ANGLE_ENCODERS[encoder](X[:, list(f)]) for encoder, f in variables]
+    return np.stack(columns, axis=1) if columns else np.zeros((len(X), 0))
+
+
+def rff_gram(circuit: State, X1: np.ndarray, X2: Optional[np.ndarray] = None,
+             n_features: int = 1024, seed: int = 0) -> np.ndarray:
+    variables, omegas = rff_frequencies(circuit, n_features, seed)
+    phase1 = _encoded(X1, variables) @ omegas.T
+    phase2 = phase1 if X2 is None else _encoded(X2, variables) @ omegas.T
+    return (np.cos(phase1) @ np.cos(phase2).T
+            + np.sin(phase1) @ np.sin(phase2).T) / n_features
 
 
 def stabilizer_renyi_entropy(psis: np.ndarray) -> np.ndarray:

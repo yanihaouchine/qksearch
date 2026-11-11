@@ -254,9 +254,9 @@
     }
   },
   "e18_simulability": {
-    "git_hash": "20820e621e1a8c023de77ce4a6bbdd4ab95a99e4",
-    "timestamp": "2026-11-10 20:55:48",
-    "wall_time_s": 677.43,
+    "git_hash": "f91e15ec065c1ef35258fddd93d1e85e52b73c1c",
+    "timestamp": "2026-11-11 09:39:33",
+    "wall_time_s": 1917.88,
     "python": "3.12.3",
     "numpy": "2.4.1",
     "params": {
@@ -294,11 +294,13 @@
         4.641588833612772,
         10.0
       ],
+      "rff_features": 512,
       "summary": {
         "kta/l1": {
           "certified": 1.0,
           "visited_certified": 1.0,
           "r2_test": 0.5301999816130116,
+          "r2_rff": NaN,
           "magic": 0.9562900147075193,
           "n_gates": 15.5,
           "n_layers": 1.0
@@ -307,30 +309,34 @@
           "certified": 1.0,
           "visited_certified": 1.0,
           "r2_test": 0.5220956036361379,
+          "r2_rff": NaN,
           "magic": 1.3740748199799193,
           "n_gates": 11.5,
           "n_layers": 1.0
         },
         "kta/l2": {
-          "certified": 0.3,
-          "visited_certified": 0.47122310884334584,
+          "certified": 1.0,
+          "visited_certified": 0.899022665368526,
           "r2_test": 0.6057034192639377,
+          "r2_rff": 0.6819704083879803,
           "magic": 0.7753379080881071,
           "n_gates": 13.5,
           "n_layers": 2.0
         },
         "kta/l2p": {
-          "certified": 0.3,
-          "visited_certified": 0.3918239369841132,
+          "certified": 0.8,
+          "visited_certified": 0.83224184530029,
           "r2_test": 0.523109302922236,
+          "r2_rff": 0.6581311456528846,
           "magic": 1.3528764112946843,
           "n_gates": 13.5,
           "n_layers": 2.0
         },
         "kta/l2pf": {
-          "certified": 0.0,
-          "visited_certified": 0.17301525534237783,
+          "certified": 0.7,
+          "visited_certified": 0.7650293040302983,
           "r2_test": 0.5477202439701264,
+          "r2_rff": 0.6491626967710358,
           "magic": 0.7420420975036195,
           "n_gates": 7.5,
           "n_layers": 2.0
@@ -339,6 +345,7 @@
           "certified": 1.0,
           "visited_certified": 1.0,
           "r2_test": 0.5593790900917693,
+          "r2_rff": NaN,
           "magic": 0.8164243255223458,
           "n_gates": 12.5,
           "n_layers": 1.0
@@ -347,30 +354,34 @@
           "certified": 1.0,
           "visited_certified": 1.0,
           "r2_test": 0.6347127157303268,
+          "r2_rff": NaN,
           "magic": 1.622898966109283,
           "n_gates": 12.5,
           "n_layers": 1.0
         },
         "mse/l2": {
-          "certified": 0.3,
-          "visited_certified": 0.12105379463301147,
+          "certified": 0.8,
+          "visited_certified": 0.8256766596036544,
           "r2_test": 0.5644700032667092,
+          "r2_rff": 0.676669423992883,
           "magic": 0.6341612903470227,
           "n_gates": 13.0,
           "n_layers": 2.0
         },
         "mse/l2p": {
-          "certified": 0.0,
-          "visited_certified": 0.10936619735301178,
+          "certified": 0.6,
+          "visited_certified": 0.6407505998362928,
           "r2_test": 0.7152256268572428,
+          "r2_rff": 0.7108178469416564,
           "magic": 1.2968003034500746,
           "n_gates": 12.5,
           "n_layers": 2.0
         },
         "mse/l2pf": {
-          "certified": 0.0,
-          "visited_certified": 0.09670431983950345,
+          "certified": 0.7,
+          "visited_certified": 0.7284359066715164,
           "r2_test": 0.6773679006580281,
+          "r2_rff": 0.7128766015819221,
           "magic": 1.328208153395984,
           "n_gates": 12.0,
           "n_layers": 2.0

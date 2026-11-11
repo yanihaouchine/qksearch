@@ -21,6 +21,9 @@ from qksearch.simulability import (
     certify,
     classical_gram,
     components,
+    encoding_spectrum,
+    rff_frequencies,
+    rff_gram,
     stabilizer_renyi_entropy,
 )
 
@@ -284,3 +287,45 @@ def test_penalty_steers_a_search_away_from_certified_circuits():
 
     assert certify(best(None), n)
     assert certify(best(SimulabilityPenalty(n, weight=10.0)), n) == frozenset()
+
+
+def test_encoding_spectrum_groups_gates_by_encoded_variable():
+    layer = IQP + PHASES + HL + (("rzz", (0, 1), (0, 1)), ("rzzh", (0, 1), (0, 1)))
+    assert encoding_spectrum(layer) == {("prod", (0,)): 1, ("prod", (0, 1)): 2,
+                                        ("prod", (1, 2)): 1, ("prod", (0, 2)): 1,
+                                        ("prod", (2,)): 1, ("havlicek", (0, 1)): 1}
+
+
+def test_rff_frequencies_stay_in_the_kernel_spectrum():
+    layer = IQP + HL + IQP + (("rz", (0,), (0,)),)
+    variables, omegas = rff_frequencies(_wrap(layer), 4096, seed=3)
+    bounds = np.array([encoding_spectrum(layer)[v] for v in variables])
+    assert omegas.shape == (4096, len(variables))
+    assert np.all(np.abs(omegas) <= bounds)
+    assert np.allclose(omegas.mean(axis=0), 0.0, atol=0.1)
+
+
+def test_rff_gram_is_a_unit_diagonal_kernel():
+    X = _inputs()
+    K = rff_gram(_wrap(IQP + HL + IQP), X, n_features=256)
+    np.testing.assert_allclose(K, K.T, atol=1e-12)
+    np.testing.assert_allclose(np.diag(K), 1.0, atol=1e-12)
+    assert np.linalg.eigvalsh(K).min() > -1e-9
+    np.testing.assert_allclose(rff_gram(_wrap(IQP), X[:5], X, n_features=256),
+                               rff_gram(_wrap(IQP), X, n_features=256)[:5])
+
+
+@pytest.mark.parametrize("layer", [
+    FIELDS,
+    (("rzz", (0, 1), (0, 1)), ("rz", (0,), (0,)), ("rz", (3,), (3,))),
+])
+def test_rff_converges_to_kernels_with_independent_parities(layer):
+    circuit = _wrap(layer)
+    X = _inputs()
+    samples = 100000
+    estimate = rff_gram(circuit, X, n_features=samples, seed=1)
+    assert np.abs(estimate - NumpyBackend(N).gram(circuit, X)).max() < 5 / np.sqrt(samples)
+
+
+def test_rff_gram_without_encoding_gates_is_constant():
+    np.testing.assert_allclose(rff_gram(_wrap(PHASES), _inputs(), n_features=8), 1.0)
