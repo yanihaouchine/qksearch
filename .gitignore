@@ -4,3 +4,12 @@ __pycache__/
 *.egg-info/
 .venv/
 .pytest_cache/
+.ruff_cache/
+
+# Generated outputs
+figures/
+
+# Private documents
+motivation.md
+report/rapport_stage.*
+report/standalone.pdf
