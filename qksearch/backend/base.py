@@ -1,3 +1,5 @@
+"""Backend protocol and the feature-to-angle encodings shared by all backends."""
+
 from __future__ import annotations
 
 from typing import Optional, Protocol
@@ -8,10 +10,14 @@ from qksearch.gates import ANGLE_ENCODING, State
 
 
 class Backend(Protocol):
+    """Anything that computes fidelity Gram matrices for a circuit."""
+
     def gram(self, state: State, X: np.ndarray) -> np.ndarray:
+        """Gram matrix ``K_ij = |<psi(x_i)|psi(x_j)>|^2`` on the rows of ``X``."""
         ...
 
     def cross_gram(self, state: State, X1: np.ndarray, X2: np.ndarray) -> np.ndarray:
+        """Kernel between the rows of ``X1`` and ``X2``, shape ``(len(X1), len(X2))``."""
         ...
 
 
@@ -28,11 +34,13 @@ def _encoder(name: Optional[str]):
 
 def feature_angles(X: np.ndarray, f: tuple[int, ...],
                    name: Optional[str] = None) -> np.ndarray:
+    """Rotation angle of a gate reading features ``f``, for every row of ``X``."""
     return np.asarray(_encoder(name)(X[:, list(f)]), dtype=float)
 
 
 def feature_angle(x: np.ndarray, f: tuple[int, ...],
                   name: Optional[str] = None) -> float:
+    """Rotation angle of a gate reading features ``f``, for one sample ``x``."""
     return float(_encoder(name)(x[list(f)]))
 
 

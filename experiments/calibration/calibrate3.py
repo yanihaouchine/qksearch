@@ -52,7 +52,8 @@ def table(raw, n_qubits, depth):
         full = iqp_circuit(bare, n_qubits)
         K_tr, K_te = backend.gram(full, train.X), backend.cross_gram(full, test.X, train.X)
         krr = KernelRidge(alpha=RIDGE_ALPHA, kernel="precomputed").fit(K_tr, train.y)
-        kta.append(h.kta(state)); var.append(float(K_tr[iu].var()))
+        kta.append(h.kta(state))
+        var.append(float(K_tr[iu].var()))
         dim.append(dla.dimension(full) / dim_max)
         r2.append(float(r2_score(test.y, krr.predict(K_te))))
         labels.append(describe(bare) if bare else "∅")
@@ -70,7 +71,9 @@ def scan(name, tables, score, ws, lbl):
             s = score(w, kta, var, dim)
             o = np.argsort(-s)
             rhos.append(spearmanr(s, r2).statistic)
-            t1.append(r2[o[0]]); t3.append(r2[o[:3]].mean()); t5.append(r2[o[:5]].mean())
+            t1.append(r2[o[0]])
+            t3.append(r2[o[:3]].mean())
+            t5.append(r2[o[:5]].mean())
         row = (np.mean(rhos), np.mean(t1), np.mean(t3), np.mean(t5))
         if base is None:
             base = row

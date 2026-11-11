@@ -5,7 +5,6 @@ from itertools import permutations
 
 import numpy as np
 
-
 from qksearch.backend import NumpyBackend, QiskitBackend
 from qksearch.backend.base import _gram_from_states
 from qksearch.dataset import (
@@ -660,8 +659,8 @@ def test_angle_scaler_fitted_on_train() -> None:
 
 
 def test_split_default_scale_unchanged() -> None:
-    from qksearch.dataset import mof_dataset
     from experiments import common
+    from qksearch.dataset import mof_dataset
 
     raw = mof_dataset(seed=0)
     reference = AngleScaler.fit(raw.X[:100], scale=np.pi / 4,

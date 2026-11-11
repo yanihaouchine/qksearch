@@ -1,3 +1,5 @@
+"""Reference backend built on Qiskit's ``Statevector`` (slow, one circuit per sample)."""
+
 from __future__ import annotations
 
 from typing import Optional
@@ -10,6 +12,8 @@ from .base import _cross_gram_from_states, _gram_from_states, feature_angle
 
 
 class QiskitBackend:
+    """Fidelity kernels simulated with Qiskit."""
+
     def __init__(self, n_qubits: int) -> None:
         from qiskit import QuantumCircuit
         from qiskit.quantum_info import Statevector
@@ -40,7 +44,7 @@ class QiskitBackend:
             theta = k * np.pi / 4
             (qc.p if arity == 1 else qc.cp)(theta, *qubits)
         else:
-            raise ValueError(f"porte inconnue : {name!r}")
+            raise ValueError(f"unknown gate: {name!r}")
 
     def _circuit(self, state: State, x: np.ndarray):
         qc = self._QuantumCircuit(self.n_qubits)

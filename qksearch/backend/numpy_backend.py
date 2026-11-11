@@ -1,3 +1,10 @@
+"""Vectorized statevector simulator in NumPy.
+
+All samples are simulated at once (states have shape ``(n_samples, 2**n)``)
+and diagonal gates reduce to an element-wise phase, which is what makes
+exhaustive scoring of 10^5 circuits practical.
+"""
+
 from __future__ import annotations
 
 from typing import Optional
@@ -16,6 +23,8 @@ _H = np.array([[_SQRT2_INV, _SQRT2_INV], [_SQRT2_INV, -_SQRT2_INV]], dtype=compl
 
 
 class NumpyBackend:
+    """Batched simulator of the gates of :mod:`qksearch.gates`, qubit 0 = least significant bit."""
+
     def __init__(self, n_qubits: int) -> None:
         if n_qubits < 1:
             raise ValueError("n_qubits must be >= 1")
@@ -72,6 +81,10 @@ class NumpyBackend:
         return np.einsum(sub, U, t, optimize=True).reshape(m, self.dim)
 
     def diagonal_phase(self, op: GateOp, X: np.ndarray) -> Optional[np.ndarray]:
+        """Phase vector of a diagonal gate, ``None`` for any other gate.
+
+        Shape ``(n_samples, 2**n)`` for a data gate, ``(2**n,)`` for a constant one.
+        """
         name, qubits, f = op
         if name == IDENTITY_NAME or name not in _DIAGONAL:
             return None
@@ -81,6 +94,7 @@ class NumpyBackend:
         return np.exp(-0.5j * angles[:, None] * self._z_pattern(name, qubits)[None, :])
 
     def apply(self, psi: np.ndarray, op: GateOp, X: np.ndarray) -> np.ndarray:
+        """Apply ``op`` to the batch of states ``psi``, with angles read from ``X``."""
         name, qubits, f = op
         if name == IDENTITY_NAME:
             return psi
@@ -119,6 +133,7 @@ class NumpyBackend:
         return psi
 
     def states(self, state: State, X: np.ndarray) -> np.ndarray:
+        """Statevectors ``U(x)|0>`` for every row of ``X``."""
         psi = self.initial_states(len(X))
         for op in state:
             psi = self.apply(psi, op, X)
@@ -131,6 +146,7 @@ class NumpyBackend:
 
     @staticmethod
     def gram_batch(psis: np.ndarray) -> np.ndarray:
+        """Gram matrices of a stack of state batches, shape ``(b, n, n)``."""
         return _unit_diagonal(np.abs(psis.conj() @ np.swapaxes(psis, 1, 2)) ** 2)
 
     def gram(self, state: State, X: np.ndarray) -> np.ndarray:

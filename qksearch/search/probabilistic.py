@@ -1,3 +1,5 @@
+"""Stochastic descents that sample children in proportion to their (look-ahead) score."""
+
 from __future__ import annotations
 
 import random
@@ -7,6 +9,27 @@ from .base import E, S, SearchStrategy
 
 
 class ProbabilisticSearch(SearchStrategy[S, E]):
+    """Repeated random descents from the root, biased by score.
+
+    At each step a child is drawn with probability proportional to its shifted
+    score, optionally averaged with its descendants' scores ``lookahead - 1``
+    levels down (discounted by ``gamma`` per level).
+
+    Parameters
+    ----------
+    lookahead
+        Depth of the look-ahead used to value a child (1: its own score).
+    gamma
+        Discount applied to each additional look-ahead level.
+    shift_fraction
+        Scores are shifted so the worst child keeps this fraction of the range
+        as weight, rather than zero.
+    max_nodes_per_level
+        Random subsample of each look-ahead level (``None``: all children).
+    n_descents
+        Number of root-to-leaf descents.
+    """
+
     path_following = True
 
     def __init__(self, lookahead: int = 1, gamma: float = 0.5,

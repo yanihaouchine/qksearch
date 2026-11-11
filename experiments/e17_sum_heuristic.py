@@ -217,7 +217,7 @@ def run_seed(seed: int, budget: int) -> tuple[list[dict], dict[str, np.ndarray]]
     return rows, space
 
 
-def run(budget: int) -> None:
+def run(budget: int = EVAL_BUDGET) -> None:
     from concurrent.futures import ProcessPoolExecutor
 
     from experiments.e17_sum_heuristic import run_seed as worker
@@ -290,13 +290,13 @@ def _circuit_image(detail: str) -> np.ndarray:
     layer = () if detail == "empty" else _parse_detail(str(detail))
     counts = Counter(layer)
     qc = QuantumCircuit(N_QUBITS)
-    for name, qubits, f in hadamards:
+    for name, qubits, _f in hadamards:
         drawer._apply(qc, name, qubits, None)
     for (name, qubits, f), k in counts.items():
         tag = PREFIX[name] + "".join(str(i) for i in f)
         drawer._apply(qc, name, qubits, Parameter(tag if k == 1 else f"{k}·{tag}"))
     qc.barrier()
-    for name, qubits, f in hadamards:
+    for name, qubits, _f in hadamards:
         drawer._apply(qc, name, qubits, None)
     drawing = qc.draw(output="mpl", style=style, fold=-1, plot_barriers=False)
     buffer = io.BytesIO()
@@ -307,7 +307,7 @@ def _circuit_image(detail: str) -> np.ndarray:
 
 
 def _load_space() -> dict[str, np.ndarray]:
-    with np.load(f"{common.RESULTS_DIR}/{SPACE}") as data:
+    with np.load(common.result_path(SPACE)) as data:
         return {key: data[key].astype(float) for key in data.files}
 
 
@@ -350,7 +350,7 @@ def plot():
                   (METHODS["random"], sub[sub["method"] == "random"]["r2_test"],
                    common.BASELINE),
                   ("best seen", tree["r2_best_seen"], common.MUTED)]
-        for i, (name, values, c) in enumerate(series):
+        for i, (_name, values, c) in enumerate(series):
             values = values.to_numpy(dtype=float)
             ax.scatter(i + rng.uniform(-0.12, 0.12, len(values)),
                        np.maximum(values, -1.0), s=16, color=c, alpha=0.75, lw=0)

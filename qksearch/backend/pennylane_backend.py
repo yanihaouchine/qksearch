@@ -1,3 +1,5 @@
+"""Reference backend built on a PennyLane device (slow, one QNode call per sample)."""
+
 from __future__ import annotations
 
 from typing import Optional
@@ -10,6 +12,8 @@ from .base import _cross_gram_from_states, _gram_from_states, feature_angle
 
 
 class PennyLaneBackend:
+    """Fidelity kernels simulated with PennyLane (``default.qubit`` by default)."""
+
     def __init__(self, n_qubits: int, device: str = "default.qubit") -> None:
         import pennylane as qml
 
@@ -43,7 +47,7 @@ class PennyLaneBackend:
             else:
                 qml.ControlledPhaseShift(theta, wires=list(qubits))
         else:
-            raise ValueError(f"porte inconnue : {name!r}")
+            raise ValueError(f"unknown gate: {name!r}")
 
     def _states(self, state: State, X: np.ndarray) -> list[np.ndarray]:
         qml = self._qml

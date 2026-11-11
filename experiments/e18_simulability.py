@@ -163,7 +163,7 @@ def _arms(train, budget: int) -> dict:
     return arms
 
 
-def run(budget: int) -> None:
+def run(budget: int = BUDGET) -> None:
     from qksearch.gates import layer_count
     from qksearch.iqp import describe
 
@@ -283,7 +283,8 @@ def plot():
         axes[4, col].set_xticklabels([m[0] for m in METHODS.values()], fontsize=7.5)
         axes[0, col].set_title(label, color=colour, fontsize=11, fontweight="bold")
 
-    for row, name in enumerate(("selected", "visited", "test $R^2$", "RFF $-$ quantum", "magic $M_2$")):
+    rows = ("selected", "visited", "test $R^2$", "RFF $-$ quantum", "magic $M_2$")
+    for row, name in enumerate(rows):
         axes[row, 0].set_ylabel(name)
     axes[0, 1].legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), fontsize=8,
                       frameon=False)

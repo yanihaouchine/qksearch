@@ -1,3 +1,5 @@
+"""Two interleaving half-moons, a non-linearly separable classification benchmark."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -6,6 +8,7 @@ from .base import Dataset
 
 
 def moons_dataset(n_samples: int = 40, noise: float = 0.15, seed: int = 0) -> Dataset:
+    """Two noisy half-moons, labels ``-1``/``+1``."""
     rng = np.random.default_rng(seed)
     half = n_samples // 2
     t1 = rng.uniform(0.0, np.pi, half)

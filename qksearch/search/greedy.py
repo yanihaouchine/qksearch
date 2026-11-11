@@ -1,9 +1,20 @@
+"""Greedy descent: always move to the best-scoring child."""
+
 from __future__ import annotations
 
 from .base import E, S, SearchStrategy
 
 
 class GreedySearch(SearchStrategy[S, E]):
+    """Follow the best child until a leaf (or no improvement).
+
+    Parameters
+    ----------
+    allow_worsening
+        Keep descending when the best child scores below its parent; if
+        ``False``, stop at the first local maximum.
+    """
+
     path_following = True
 
     def __init__(self, allow_worsening: bool = True,

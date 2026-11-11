@@ -1,3 +1,9 @@
+"""Hydrogen uptake of metal-organic frameworks (MOF): 294 measurements.
+
+Features: BET surface area (m^2/g), pore volume (m^3/g), pressure (bar) and
+temperature (K, 30 to 300); target: hydrogen uptake (wt %).
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -29,6 +35,10 @@ def mof_dataset(
     seed: int = 0,
     path: Path | str = CSV_PATH,
 ) -> RegressionDataset:
+    """Shuffled MOF dataset with standardized targets.
+
+    ``n_samples`` draws a random subset (default: all rows, in random order).
+    """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"dataset not found: {path}")

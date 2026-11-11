@@ -30,9 +30,9 @@ def run() -> None:
     import pandas as pd
     from sklearn.metrics.pairwise import rbf_kernel
 
+    from experiments.e5_benchmark import _r2, _rbf_gamma_cv
     from qksearch.dataset import RegressionDataset
     from qksearch.dataset.mof import CSV_PATH, FEATURES, TARGET
-    from experiments.e5_benchmark import _r2, _rbf_gamma_cv
 
     t0 = time.time()
 
@@ -139,8 +139,8 @@ def plot() -> None:
     ax.set_xticks(range(4))
     ax.set_xticklabels([f"$x_{i}$" for i in range(4)])
     ax.set_ylim(0, len(mof) * 1.18)
-    ax.set_ylabel("circuits MOF gardant la feature")
-    ax.set_title("(a) $x_1$ est presque toujours jeté")
+    ax.set_ylabel("MOF circuits keeping the feature")
+    ax.set_title("(a) $x_1$ is almost always dropped")
     ax.grid(True, axis="y", alpha=0.5)
 
     ax = axes[1]
@@ -159,7 +159,7 @@ def plot() -> None:
     ax.set_yticklabels([SHORT[c] for c in labels], fontsize=6.5)
     ax.tick_params(length=0)
     bet_vol = float(corr.loc["bet_m2_g", "volume_m3_g"])
-    ax.set_title(f"(b) $x_0$–$x_1$ colinéaires ($r = {bet_vol:.2f}$)")
+    ax.set_title(f"(b) $x_0$ and $x_1$ are collinear ($r = {bet_vol:.2f}$)")
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03).ax.tick_params(
         labelsize=6.5, length=0)
 
@@ -177,15 +177,15 @@ def plot() -> None:
     baseline = float(np.median(df[df["variant"] == "all"]["r2_cv"]))
     ax.axhline(baseline, color=common.INK2, lw=0.9, ls=":")
     ax.set_xticks(range(len(variants)))
-    ax.set_xticklabels(["toutes"] + [f"sans $x_{v[-1]}$" for v in variants[1:]],
+    ax.set_xticklabels(["all"] + [f"without $x_{v[-1]}$" for v in variants[1:]],
                        fontsize=7.5)
-    ax.set_ylabel("$R^2$ test (RBF, $\\gamma$ par CV)")
-    ax.set_title("(c) retirer $x_1$ n'abîme rien")
+    ax.set_ylabel("test $R^2$ (RBF, $\\gamma$ by CV)")
+    ax.set_title("(c) dropping $x_1$ costs nothing")
     ax.grid(True, axis="y", alpha=0.5)
     triples = ", ".join(
         f"$R^2({t.replace('_', ',').replace('x', 'x_')}) = {r:.2f}$"
         for t, r in zip(multi["triple"], multi["R2"]))
-    ax.text(0.5, -0.34, f"corrélation multiple linéaire : {triples}",
+    ax.text(0.5, -0.34, f"linear multiple correlation: {triples}",
             transform=ax.transAxes, ha="center", va="top", fontsize=6.5,
             color=common.MUTED)
 

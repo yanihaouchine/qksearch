@@ -1,3 +1,5 @@
+"""Depth-first search with optional pruning."""
+
 from __future__ import annotations
 
 from typing import Callable, Optional
@@ -6,6 +8,14 @@ from .base import E, S, SearchStrategy
 
 
 class BacktrackingSearch(SearchStrategy[S, E]):
+    """Depth-first search that visits the most promising child first.
+
+    Parameters
+    ----------
+    prune
+        ``prune(state, score) -> bool``; pruned states are not expanded.
+    """
+
     def __init__(self, prune: Optional[Callable[[S, float], bool]] = None,
                  record_complete_only: bool = False) -> None:
         super().__init__(record_complete_only)

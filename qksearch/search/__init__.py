@@ -1,9 +1,11 @@
+"""Search strategies over gate sequences, all driven by the same :class:`Heuristic` protocol."""
+
 from __future__ import annotations
 
 from .backtracking import BacktrackingSearch
 from .base import E, Heuristic, S, SearchResult, SearchStrategy, search
 from .best_first import BestFirstSearch
-from .genetic import GeneticSearch, GenerationStats, seed_population
+from .genetic import GenerationStats, GeneticSearch, seed_population
 from .greedy import GreedySearch
 from .mcts import MctsSearch
 from .population import (

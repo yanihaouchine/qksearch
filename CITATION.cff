@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "qksearch: combinatorial search for quantum-kernel feature maps"
+authors:
+  - family-names: Haouchine
+    given-names: Yani
+version: 1.0.0
+date-released: 2026-10-16
+license: MIT
+repository-code: "https://github.com/yanihaouchine/qksearch"
+keywords:
+  - quantum machine learning
+  - quantum kernels
+  - architecture search

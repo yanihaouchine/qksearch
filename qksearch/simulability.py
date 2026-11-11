@@ -1,3 +1,20 @@
+"""Certificates that a circuit's kernel can be computed classically.
+
+A circuit is first normalized: Hadamard frames are tracked per qubit, gates
+that cannot act (Z rotations on untouched ``|0>`` qubits, trailing constant
+phases) are dropped, and the qubits are split into non-interacting blocks.
+Each block is then certified by a structural rule:
+
+- ``product``: a single qubit;
+- ``iqp``: diagonal gates conjugated by Hadamards; the overlap is an average
+  of ``2**k`` unit phases, exact or estimated by sampling bitstrings;
+- ``matchgate``: Z and XX rotations on a path, i.e. free fermions, whose
+  overlaps are determinants (Valiant; Terhal & DiVincenzo).
+
+:func:`rff_gram` adds an empirical test: random Fourier features drawn
+from the circuit's integer frequency spectrum (Rahimi & Recht, 2007).
+"""
+
 from __future__ import annotations
 
 from functools import reduce
@@ -7,7 +24,14 @@ import numpy as np
 
 from qksearch.backend import NumpyBackend
 from qksearch.backend.base import ANGLE_ENCODERS, feature_angles
-from qksearch.gates import ANGLE_ENCODING, HADAMARD_LAYER_NAME, IDENTITY_NAME, PHASE_POWERS, GateOp, State
+from qksearch.gates import (
+    ANGLE_ENCODING,
+    HADAMARD_LAYER_NAME,
+    IDENTITY_NAME,
+    PHASE_POWERS,
+    GateOp,
+    State,
+)
 
 ZZ_GATES = frozenset({"rzz", "rzzh", "rzzhn"})
 ROTATIONS = ZZ_GATES | {"rz", "rx"}
@@ -118,6 +142,7 @@ def _blocks(circuit: State, n_qubits: int) -> Optional[list[tuple[tuple[int, ...
 
 
 def components(circuit: State, n_qubits: int) -> list[tuple[int, ...]]:
+    """Groups of qubits that never interact after simplification."""
     blocks = _blocks(circuit, n_qubits)
     if blocks is None:
         return [tuple(range(n_qubits))]
@@ -160,6 +185,10 @@ def _rule(gates: list[Gate], k: int) -> Optional[str]:
 
 
 def certify(circuit: State, n_qubits: int) -> frozenset[str]:
+    """Rules certifying every block of ``circuit``; empty if one block has none.
+
+    Examples: ``frozenset({"iqp"})``, ``frozenset({"product", "matchgate"})``.
+    """
     blocks = _blocks(circuit, n_qubits)
     if blocks is None:
         return frozenset()
@@ -230,6 +259,13 @@ def _matchgate_gram(gates: list[Gate], X: np.ndarray, k: int) -> np.ndarray:
 
 def classical_gram(circuit: State, X: np.ndarray, n_qubits: int,
                    samples: Optional[int] = None, seed: int = 0) -> np.ndarray:
+    """Gram matrix computed by the certificates, without a statevector.
+
+    The kernel of a block-separable circuit is the product of the block
+    kernels. ``samples`` switches IQP blocks from the exact sum over all
+    bitstrings to a Monte Carlo estimate. Raises ``ValueError`` if a block is
+    not certified.
+    """
     blocks = _blocks(circuit, n_qubits)
     if blocks is None:
         raise ValueError("circuit mixes Hadamard frames inside a gate")
@@ -253,6 +289,11 @@ Variable = tuple[str, tuple[int, ...]]
 
 
 def encoding_spectrum(circuit: State) -> dict[Variable, int]:
+    """How many gates read each encoded variable.
+
+    A variable read by ``c`` gates enters the kernel with integer frequencies
+    in ``[-c, c]``.
+    """
     spectrum: dict[Variable, int] = {}
     for name, _, f in circuit:
         if f is not None:
@@ -263,6 +304,11 @@ def encoding_spectrum(circuit: State) -> dict[Variable, int]:
 
 def rff_frequencies(circuit: State, n_features: int,
                     seed: int = 0) -> tuple[list[Variable], np.ndarray]:
+    """Random integer frequencies of shape ``(n_features, n_variables)``.
+
+    The frequency of a variable read by ``c`` gates is drawn from
+    ``Binomial(2c, 1/2) - c``.
+    """
     spectrum = encoding_spectrum(circuit)
     counts = np.array(list(spectrum.values()), dtype=int)
     rng = np.random.default_rng(seed)
@@ -277,6 +323,11 @@ def _encoded(X: np.ndarray, variables: list[Variable]) -> np.ndarray:
 
 def rff_gram(circuit: State, X1: np.ndarray, X2: Optional[np.ndarray] = None,
              n_features: int = 1024, seed: int = 0) -> np.ndarray:
+    """Random-Fourier-feature kernel ``mean_w cos(w . (phi(x) - phi(x')))``.
+
+    ``phi`` are the encoded variables of the circuit and ``w`` its sampled
+    frequencies (see :func:`rff_frequencies`).
+    """
     variables, omegas = rff_frequencies(circuit, n_features, seed)
     phase1 = _encoded(X1, variables) @ omegas.T
     phase2 = phase1 if X2 is None else _encoded(X2, variables) @ omegas.T
@@ -285,6 +336,10 @@ def rff_gram(circuit: State, X1: np.ndarray, X2: Optional[np.ndarray] = None,
 
 
 def stabilizer_renyi_entropy(psis: np.ndarray) -> np.ndarray:
+    """Stabilizer 2-Rényi entropy ``M_2`` ("magic") of each state (Leone et al., 2022).
+
+    ``M_2 = 0`` exactly for stabilizer states; it grows with non-Clifford content.
+    """
     psis = np.atleast_2d(psis)
     dim = psis.shape[-1]
     walsh = reduce(np.kron, [np.array([[1.0, 1.0], [1.0, -1.0]])] * (dim.bit_length() - 1))
@@ -297,6 +352,8 @@ def stabilizer_renyi_entropy(psis: np.ndarray) -> np.ndarray:
 
 
 class SimulabilityPenalty:
+    """Penalty ``-weight`` on certified circuits, to steer the search away from them."""
+
     needs_gram = False
 
     def __init__(self, n_qubits: int, weight: float = 1.0) -> None:

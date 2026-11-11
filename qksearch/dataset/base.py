@@ -1,3 +1,5 @@
+"""Immutable, validated containers for features ``X`` and targets ``y``."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,6 +9,8 @@ import numpy as np
 
 @dataclass(frozen=True)
 class BaseDataset:
+    """Features ``X`` (``n_samples`` x ``n_features``) and targets ``y`` (``n_samples``)."""
+
     X: np.ndarray
     y: np.ndarray
 
@@ -29,6 +33,8 @@ class BaseDataset:
 
 @dataclass(frozen=True)
 class Dataset(BaseDataset):
+    """Binary classification dataset with labels in ``{-1, +1}``."""
+
     def __post_init__(self) -> None:
         super().__post_init__()
         if not set(np.unique(self.y)) <= {-1, 1}:
@@ -37,6 +43,8 @@ class Dataset(BaseDataset):
 
 @dataclass(frozen=True)
 class RegressionDataset(BaseDataset):
+    """Regression dataset with real, non-constant targets."""
+
     def __post_init__(self) -> None:
         super().__post_init__()
         if not np.issubdtype(self.y.dtype, np.floating):
@@ -45,5 +53,6 @@ class RegressionDataset(BaseDataset):
             raise ValueError("y is constant: no kernel can be told apart")
 
     def standardized(self) -> RegressionDataset:
+        """Copy with zero-mean, unit-variance targets."""
         y = np.asarray(self.y, dtype=float)
         return RegressionDataset(self.X, (y - y.mean()) / y.std())

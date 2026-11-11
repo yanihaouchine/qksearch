@@ -1,3 +1,9 @@
+"""Scores of a Gram matrix against the training targets (higher is better).
+
+Every metric is a callable ``metric(gram, y) -> float``; most also offer
+``batch(grams, y)`` for a stack of Gram matrices of shape ``(b, n, n)``.
+"""
+
 from __future__ import annotations
 
 from .base import Metric

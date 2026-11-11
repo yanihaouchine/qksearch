@@ -193,7 +193,7 @@ def _strip(ax, df, names, column, floor=None) -> None:
 
 
 def _load_space(depth: int) -> dict[str, np.ndarray]:
-    with np.load(_space_path(depth)) as data:
+    with np.load(common.result_path(os.path.basename(_space_path(depth)))) as data:
         k = int(np.flatnonzero(data["seeds"] == SCATTER_SEED)[0])
         return {name: data[name.replace("-", "_")][k].astype(float)
                 for name in (*OBJECTIVES, "r2_test")}

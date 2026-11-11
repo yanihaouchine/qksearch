@@ -167,9 +167,9 @@ def _check_idle_qubits() -> None:
     K = [_heuristic(train, _gate_set(n, n_features=4), n, 4).evaluator.gram(state)
          for n in (4, 6)]
     gap = float(np.abs(K[0] - K[1]).max())
-    assert gap < 1e-12, f"les qubits inactifs ne sont pas neutres : {gap:.2e}"
-    print(f"  qubits inactifs (4 features sur 4 vs 6 qubits) : "
-          f"écart max {gap:.2e}")
+    assert gap < 1e-12, f"idle qubits are not neutral: {gap:.2e}"
+    print(f"  idle qubits (4 features on 4 vs 6 qubits): "
+          f"max gap {gap:.2e}")
 
 
 def _check_arms_agree() -> None:
@@ -178,8 +178,8 @@ def _check_arms_agree() -> None:
         b = _split("sine-fixed", 2, seed, REFERENCE)
         for da, db in zip(a, b):
             assert np.array_equal(da.X, db.X) and np.array_equal(da.y, db.y), \
-                f"les deux bras divergent à n=2, seed {seed}"
-    print("  bras sine-full / sine-fixed identiques à n=2 : ok")
+                f"the two arms differ at n=2, seed {seed}"
+    print("  arms sine-full / sine-fixed identical at n=2: ok")
 
 
 def _check_sampler_uniform() -> None:
@@ -197,12 +197,12 @@ def _check_sampler_uniform() -> None:
     share = float(counts[repeats].sum() / counts.sum())
     uniform, iid = len(repeats) / len(space), (1.0 / m) ** (depth - 1)
     assert abs(share - uniform) < abs(share - iid) / 2.0, (
-        f"tirage non uniforme : part des répétitions {share:.4f} "
-        f"(uniforme {uniform:.4f}, i.i.d. {iid:.4f})")
+        f"non-uniform sampling: share of repeats {share:.4f} "
+        f"(uniform {uniform:.4f}, i.i.d. {iid:.4f})")
     p = float(chisquare(counts).pvalue)
-    assert p > 1e-4, f"tirage non uniforme sur les multiensembles (p = {p:.2e})"
-    print(f"  tirage uniforme sur {len(space)} multiensembles (m={m}, d={depth}) : "
-          f"répétitions {share:.4f} (uniforme {uniform:.4f}, i.i.d. {iid:.4f}), "
+    assert p > 1e-4, f"non-uniform sampling over multisets (p = {p:.2e})"
+    print(f"  uniform sampling over {len(space)} multisets (m={m}, d={depth}): "
+          f"repeats {share:.4f} (uniform {uniform:.4f}, i.i.d. {iid:.4f}), "
           f"chi2 p = {p:.3f}")
 
 
@@ -214,10 +214,10 @@ def _check_binomial(upper: np.ndarray, shots: int) -> None:
     spread = float(np.abs(draws.var(axis=0) - expected).max())
     counts = draws * shots
     assert np.allclose(counts, np.round(counts))
-    assert bias < 1e-2, f"estimateur biaisé : {bias:.2e}"
-    assert spread < 5e-3, f"variance hors de K(1-K)/M : {spread:.2e}"
-    print(f"  estimateur binomial à M={shots} : biais max {bias:.2e}, "
-          f"écart de variance {spread:.2e}")
+    assert bias < 1e-2, f"biased estimator: {bias:.2e}"
+    assert spread < 5e-3, f"variance away from K(1-K)/M: {spread:.2e}"
+    print(f"  binomial estimator at M={shots}: max bias {bias:.2e}, "
+          f"variance gap {spread:.2e}")
 
 
 def _check_kta_paths(evaluator, states, y, ktas: np.ndarray) -> None:
@@ -229,19 +229,12 @@ def _check_kta_paths(evaluator, states, y, ktas: np.ndarray) -> None:
         assert abs(direct - value) < 1e-12, (direct, value)
 
 
-def _check_against_e13() -> None:
-    df = common.read_csv("e13_space.csv")
-    ref = df[(df["dataset"] == "sine")
-             & np.isclose(df["scale_over_pi"], REFERENCE / np.pi)
-             & (df["seed"] == 0)].sort_values("circuit_id")["kta"].to_numpy()
+def _check_anchor() -> None:
     train, _ = common.sine_split(0, n_features=2, scale=REFERENCE)
     gs = _gate_set(2)
     states = _enumerate(gs, 4)
-    ktas = _heuristic(train, gs, 2, 4).evaluator.kta_many(states)
-    assert len(ref) == len(ktas), (len(ref), len(ktas))
-    gap = float(np.abs(ref - ktas).max())
-    assert gap < 1e-9, f"E15 diverge de E13 de {gap:.2e}"
-    print(f"  recoupement E13 (sine 2q, profondeur 4) : écart max {gap:.2e}")
+    common.check_sine_anchor(_heuristic(train, gs, 2, 4).evaluator.kta_many(states))
+    print("  sine 2q, depth 4, seed 0 matches the E3 anchor")
 
 
 def _distinct(states) -> np.ndarray:
@@ -316,9 +309,9 @@ def _run_contrast() -> tuple[list[dict], list[dict]]:
                         gap = (kta_by_source["sample"].max()
                                - kta_by_source["exhaustive"].max())
                         assert gap < 1e-12, (
-                            f"n={n} {dataset}: le max échantillonné dépasse "
-                            f"l'exhaustif de {gap:.2e}")
-                print(f"  n={n} {dataset:10s} seed {seed} fait")
+                            f"n={n} {dataset}: the sampled max exceeds "
+                            f"the exhaustive one by {gap:.2e}")
+                print(f"  n={n} {dataset:10s} seed {seed} done")
     return contrast_rows, shot_rows
 
 
@@ -348,7 +341,8 @@ def _shots_for(n, dataset, seed, uppers, ktas, y, rng) -> list[dict]:
 def _run_search() -> list[dict]:
     from sklearn.metrics.pairwise import linear_kernel, rbf_kernel
 
-    from qksearch.search import MctsSearch, search as run_search
+    from qksearch.search import MctsSearch
+    from qksearch.search import search as run_search
 
     rows: list[dict] = []
     for n in SEARCH_QUBITS:
@@ -394,9 +388,9 @@ def _run_search() -> list[dict]:
                         "detail": f"gamma={gamma:g}" if arm == "rbf-cv" else "",
                     })
                 mcts_r2 = rows[-4]["r2_test"]
-                print(f"  n={n} {dataset:10s} seed {seed} : "
+                print(f"  n={n} {dataset:10s} seed {seed}: "
                       f"R2 mcts {mcts_r2:+.3f}, "
-                      f"aléatoire {rows[-3]['r2_test']:+.3f}, "
+                      f"random {rows[-3]['r2_test']:+.3f}, "
                       f"RBF {rows[-2]['r2_test']:+.3f}")
     return rows
 
@@ -415,19 +409,19 @@ def _search_row(n, dataset, seed, arm, n_evaluated, wall, heuristic, state,
 
 def run() -> None:
     t0 = time.time()
-    print("garde-fous :")
+    print("sanity checks:")
     _check_idle_qubits()
     _check_arms_agree()
     _check_sampler_uniform()
     if not SMOKE:
-        _check_against_e13()
+        _check_anchor()
 
-    print("A+B — contraste entre circuits et coût en shots :")
+    print("A+B — contrast between circuits and shot cost:")
     contrast_rows, shot_rows = _run_contrast()
     common.write_csv(CSV_CONTRAST, contrast_rows)
     common.write_csv(CSV_SHOTS, shot_rows)
 
-    print("C — la recherche paie-t-elle encore :")
+    print("C — does the search still pay off:")
     search_rows = _run_search()
     common.write_csv(CSV_SEARCH, search_rows)
 
@@ -439,7 +433,7 @@ def run() -> None:
                       eval_budget=EVAL_BUDGET, datasets=list(DATASETS),
                       depth_rule="d = n", exhaustive_max_n=EXHAUSTIVE_MAX_N,
                       rho_target=RHO_TARGET, smoke=SMOKE)
-    print(f"E15 terminée en {time.time() - t0:.1f}s")
+    print(f"E15 done in {time.time() - t0:.1f}s")
 
 
 def _ramp(k: int, total: int) -> str:
@@ -450,11 +444,12 @@ def _ramp(k: int, total: int) -> str:
 
 
 ARMS = {"mcts": ("MCTS", BLUE_ := common.BLUE, "-", "o"),
-        "random-best": ("tirage uniforme, même coût", common.RED, "--", "s"),
-        "rbf-cv": ("RBF, $\\gamma$ par CV", common.MUTED, ":", "^"),
-        "linear": ("noyau linéaire", common.BASELINE, "-.", "")}
-DATASET_LABEL = {"sine-fixed": "cible figée ($n-2$ features de nuisance)",
-                 "sine-full": "cible sur les $n$ features"}
+        "random-best": ("uniform sampling, same cost", common.RED, "--", "s"),
+        "rbf-cv": ("RBF, $\\gamma$ by CV", common.MUTED, ":", "^"),
+        "linear": ("linear kernel", common.BASELINE, "-.", "")}
+DATASET_LABEL = {"sine-fixed": "fixed target ($n-2$ nuisance features)",
+                 "sine-full": "target on all $n$ features"}
+TARGET_LABEL = {"sine-fixed": "fixed target", "sine-full": "target on $n$"}
 
 
 def _median_band(ax, x, groups, color, ls, marker, label, alpha=0.15):
@@ -493,20 +488,20 @@ def plot() -> None:
         ax.annotate(f"$\\pi/{int(round(1 / sc))}$" if sc < 1 else "$\\pi$",
                     (ns[-1], y[-1]), xytext=(4, 0), textcoords="offset points",
                     fontsize=7, color=common.INK2, va="center")
-    ax.set_xlabel("nombre de qubits $n$ (profondeur $d = n$)")
-    ax.set_ylabel(r"contraste $(\mathrm{KTA}_{\max}-\mathrm{med})/\mathrm{sd}$")
-    ax.set_title("Le contraste tient — la bande passante\nen fixe le niveau",
+    ax.set_xlabel("number of qubits $n$ (depth $d = n$)")
+    ax.set_ylabel(r"contrast $(\mathrm{KTA}_{\max}-\mathrm{med})/\mathrm{sd}$")
+    ax.set_title("The contrast holds; the bandwidth\nsets its level",
                  fontsize=8.5)
     ax.set_xticks(ns)
     ax.set_xlim(ns[0] - 0.3, ns[-1] + 0.9)
     ax.grid(True, alpha=0.4)
 
     ax = axes[0][1]
-    series = [("var_offdiag_median", r"$\mathrm{Var}[K_{ij}]$ (la mesure d'E1)",
+    series = [("var_offdiag_median", r"$\mathrm{Var}[K_{ij}]$ (what E1 measures)",
                common.MUTED, ":", "s"),
-              ("kta_gap", r"écart absolu $\mathrm{KTA}_{\max}-\mathrm{med}$",
+              ("kta_gap", r"absolute gap $\mathrm{KTA}_{\max}-\mathrm{med}$",
                common.RED, "--", "^"),
-              ("contrast", "contraste normalisé", common.BLUE, "-", "o")]
+              ("contrast", "normalized contrast", common.BLUE, "-", "o")]
     for column, label, color, ls, marker in series:
         y = ref[ref["dataset"] == hard].groupby("n_qubits")[column].mean()
         y = (y.reindex(ns) / y.loc[ns[0]]).to_numpy()
@@ -516,9 +511,9 @@ def plot() -> None:
                     va="center", ha="left")
     ax.axhline(1.0, color=common.BASELINE, lw=0.7, ls=":")
     ax.set_yscale("log")
-    ax.set_xlabel("nombre de qubits $n$")
-    ax.set_ylabel("valeur rapportée à $n = 2$")
-    ax.set_title("Ce qu'E1 mesure baisse, ce que la\nrecherche consomme non",
+    ax.set_xlabel("number of qubits $n$")
+    ax.set_ylabel("value relative to $n = 2$")
+    ax.set_title("What E1 measures decays; what the\nsearch relies on does not",
                  fontsize=8.5)
     ax.set_xticks(ns)
     ax.set_xlim(ns[0] - 0.3, ns[-1] + 4.6)
@@ -542,9 +537,9 @@ def plot() -> None:
             fontsize=6.5, color=common.RED, va="top", ha="right")
     ax.set_xscale("log")
     ax.set_xlim(0.55, 2.2e4)
-    ax.set_xlabel("shots par entrée du Gram $M$")
-    ax.set_ylabel(r"$\rho$ de Spearman avec le classement exact")
-    ax.set_title("Les shots ne cassent pas :\n$M^\\star \\leq 30$ jusqu'à $n = 8$",
+    ax.set_xlabel("shots per Gram entry $M$")
+    ax.set_ylabel(r"Spearman $\rho$ with the exact ranking")
+    ax.set_title("Shots do not break:\n$M^\\star \\leq 30$ up to $n = 8$",
                  fontsize=8.5)
     ax.grid(True, alpha=0.4)
 
@@ -557,10 +552,10 @@ def plot() -> None:
             ax.plot(xs, g.groupby("n_qubits")["kta"].median().reindex(xs).to_numpy(),
                     color=color, lw=1.6, ls=dash, marker=marker, ms=3.5,
                     mfc="white" if dash == "--" else color,
-                    label=f"{label} — {'cible figée' if dataset == 'sine-fixed' else 'cible sur $n$'}")
-    ax.set_xlabel("nombre de qubits $n$")
-    ax.set_ylabel("KTA du circuit élu")
-    ax.set_title("La recherche décroche : MCTS passe\nsous le tirage uniforme",
+                    label=f"{label} — {TARGET_LABEL[dataset]}")
+    ax.set_xlabel("number of qubits $n$")
+    ax.set_ylabel("KTA of the selected circuit")
+    ax.set_title("The search breaks: MCTS falls\nbelow uniform sampling",
                  fontsize=8.5)
     ax.set_xticks(sorted(search["n_qubits"].unique()))
     ax.grid(True, alpha=0.4)
@@ -576,16 +571,16 @@ def plot() -> None:
                          marker, label, alpha=0.12 if marker else 0.0)
         ax.axhline(0.0, color=common.BASELINE, lw=0.8, ls=":")
         ax.set_ylim(min(lo * 1.1, -0.6), 1.7)
-        ax.set_xlabel("nombre de qubits $n$")
+        ax.set_xlabel("number of qubits $n$")
         ax.set_xticks(xs)
         ax.grid(True, alpha=0.4)
-        ax.set_title(f"$R^2$ test — {DATASET_LABEL[dataset]}", fontsize=8.5)
-    axes[1][1].set_ylabel("$R^2$ test (médiane sur 5 graines)")
+        ax.set_title(f"test $R^2$ — {DATASET_LABEL[dataset]}", fontsize=8.5)
+    axes[1][1].set_ylabel("test $R^2$ (median over 5 seeds)")
     axes[1][2].tick_params(labelleft=False)
     axes[1][2].legend(fontsize=6, loc="upper right")
 
-    fig.suptitle("E15 — passage à l'échelle en qubits : ce qui casse en premier "
-                 "n'est ni le contraste, ni les shots, mais la recherche",
+    fig.suptitle("E15 — scaling in qubits: what breaks first "
+                 "is neither the contrast nor the shots, but the search",
                  fontsize=10)
     fig.tight_layout(rect=(0, 0, 1, 0.955))
     common.save_fig(fig, "fig_e15_scaling")

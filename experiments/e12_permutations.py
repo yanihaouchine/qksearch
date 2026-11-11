@@ -116,7 +116,7 @@ def run() -> None:
             block = rows[-len(perms):]
             spread = max(r["kta"] for r in block) - min(r["kta"] for r in block)
             print(f"{family:8s} {name}  {len(perms):3d} permutations  "
-                  f"KTA={ref_kta:+.6f}  étendue={spread:.3e}")
+                  f"KTA={ref_kta:+.6f}  spread={spread:.3e}")
 
     common.write_csv(CSV, rows)
     common.write_meta("e12", time.time() - t0, seed=SEED, n_qubits=N_QUBITS,
@@ -126,23 +126,18 @@ def run() -> None:
 
 
 def plot() -> None:
-    import os
 
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
 
     common.report_style()
-    import pandas as pd
-
-    df = pd.read_csv(os.path.join(common.RESULTS_DIR, CSV),
-                     float_precision="round_trip",
-                     dtype={"order": str})
+    df = common.read_csv(CSV, float_precision="round_trip", dtype={"order": str})
 
     families = (
-        ("iqp", common.BLUE, "IQP — couche entièrement diagonale",
-         "les portes commutent : une seule valeur par multiensemble"),
-        ("control", common.RED, "Contrôle — une rx dans la couche",
-         "les portes ne commutent plus : l'ordre change la valeur"),
+        ("iqp", common.BLUE, "IQP — fully diagonal layer",
+         "the gates commute: one value per multiset"),
+        ("control", common.RED, "Control — one rx inside the layer",
+         "the gates no longer commute: order changes the value"),
     )
 
     fig, axes = plt.subplots(1, 2, figsize=(15.5, 8.6), constrained_layout=True)
@@ -164,8 +159,8 @@ def plot() -> None:
         ax.text(0.0, y + 0.3 * h, subtitle, fontsize=8, color=common.INK2,
                 va="center")
         y -= 1.6 * h
-        for label, x, align in (("ordre", x_perm, "left"),
-                                ("circuit (couche diagonale, hors Hadamard)",
+        for label, x, align in (("order", x_perm, "left"),
+                                ("circuit (diagonal layer, Hadamards omitted)",
                                  x_circ, "left"),
                                 ("KTA", x_val, "left")):
             ax.text(x, y, label, fontsize=8, color=common.MUTED, va="center",
@@ -180,8 +175,8 @@ def plot() -> None:
             ax.text(x_perm, y, name, fontsize=8.5, color=color, weight="bold",
                     va="center")
             ax.text(x_circ, y,
-                    f"{len(g)} permutations du même multiensemble de "
-                    f"{int(g['n_gates'].iloc[0])} portes",
+                    f"{len(g)} permutations of the same multiset of "
+                    f"{int(g['n_gates'].iloc[0])} gates",
                     fontsize=7.5, color=common.INK2, va="center")
             y -= h
             for _, r in g.iterrows():
@@ -200,9 +195,9 @@ def plot() -> None:
                 y -= h
             y -= h
 
-    fig.suptitle("E12 — un circuit par ligne, sa fonction objectif en face : "
-                 "les permutations d'une couche IQP donnent la même valeur, "
-                 "le contrôle non diagonal non", fontsize=12)
+    fig.suptitle("E12 — one circuit per row, its objective alongside: "
+                 "permutations of an IQP layer give the same value, "
+                 "the non-diagonal control does not", fontsize=12)
     common.save_fig(fig, FIG, formats=("png",))
     plt.close(fig)
 
@@ -210,7 +205,7 @@ def plot() -> None:
         sub = df[df["family"] == family]
         worst = max(g["kta"].max() - g["kta"].min()
                     for _, g in sub.groupby("circuit"))
-        print(f"{family:8s} : étendue max sur {len(sub)} évaluations = "
+        print(f"{family:8s}: max spread over {len(sub)} evaluations = "
               f"{worst:.3e} ({'≤' if worst <= 8 * EPS else '>'} 8ε = "
               f"{8 * EPS:.1e})")
 

@@ -1,3 +1,10 @@
+"""Exhaustive enumeration of small IQP circuits (2 qubits, depth 4).
+
+Every circuit is evaluated (KTA, test R^2, DLA dimension, expressibility,
+geometric difference to RBF) and drawn in a summary table. Run with
+``python -m qksearch.enumerate_circuits``.
+"""
+
 from __future__ import annotations
 
 import os
@@ -175,7 +182,7 @@ def draw_circuit(ax, layer: State, *, wires: dict[int, float] | None = None,
         ax.text(-0.35, y, f"q{_sub(q)}", fontsize=fontsize + 0.5, color=INK2,
                 ha="center", va="center")
 
-    for q, y in wires.items():
+    for y in wires.values():
         _box(ax, 0.5, y, y, "H", MUTED, box_h, fontsize)
         _box(ax, n_cols - 0.5, y, y, "H", MUTED, box_h, fontsize)
 

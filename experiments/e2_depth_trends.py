@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 import time
 
-
 from experiments import common
 
 CSV = "e2_depth_trends.csv"
@@ -63,7 +62,7 @@ def run() -> None:
                     "dla": static[s]["dla"],
                     "var4": heuristic.evaluator.feature(s),
                 })
-            print(f"{config} seed {seed} fait ({time.time() - t0:.1f}s)")
+            print(f"{config} seed {seed} done ({time.time() - t0:.1f}s)")
     common.write_csv(CSV, rows)
     common.write_meta("e2_depth_trends", time.time() - t0,
                       configs={k: v for k, v in CONFIGS.items()})

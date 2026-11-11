@@ -4,14 +4,13 @@ import csv
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 import time
 
 import matplotlib as mpl
 import numpy as np
-
-REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 from qksearch.compare_kernels import (
     BASELINE,
@@ -29,6 +28,7 @@ from qksearch.dataset import (
     sine_dataset,
 )
 
+REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RESULTS_DIR = os.path.join(REPO_DIR, "results")
 REPORT_FIG_DIR = os.path.join(REPO_DIR, "report", "figures")
 
@@ -99,10 +99,58 @@ def write_csv(name: str, rows: list[dict]) -> str:
     return path
 
 
-def read_csv(name: str):
+PRODUCERS = {"population_mof.csv": "population_circuits"}
+
+
+def _producer(name: str) -> str | None:
+    if name in PRODUCERS:
+        return PRODUCERS[name]
+    match = re.match(r"e(\d+)_", name)
+    if match is None:
+        return None
+    prefix = f"e{match.group(1)}_"
+    for entry in sorted(os.listdir(os.path.dirname(os.path.abspath(__file__)))):
+        if entry.startswith(prefix) and entry.endswith(".py"):
+            return entry[:-3]
+    return None
+
+
+def _run_producer(module_name: str, name: str) -> None:
+    import importlib
+    import inspect
+
+    module = importlib.import_module(f"experiments.{module_name}")
+    entry = getattr(module, "run", None) or module.main
+    kwargs = {}
+    depth = re.search(r"_d(\d+)\.", name)
+    if depth and "depth" in inspect.signature(entry).parameters:
+        kwargs["depth"] = int(depth.group(1))
+    argv = sys.argv
+    sys.argv = [module_name, "--no-show"]
+    try:
+        entry(**kwargs)
+    finally:
+        sys.argv = argv
+
+
+def result_path(name: str) -> str:
+    path = os.path.join(RESULTS_DIR, name)
+    if os.path.exists(path):
+        return path
+    producer = _producer(name)
+    if producer is None:
+        raise FileNotFoundError(f"{path} is missing and no experiment produces it")
+    print(f"{name} is missing: running experiments.{producer} first")
+    _run_producer(producer, name)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"experiments.{producer} did not write {path}")
+    return path
+
+
+def read_csv(name: str, **kwargs):
     import pandas as pd
 
-    return pd.read_csv(os.path.join(RESULTS_DIR, name))
+    return pd.read_csv(result_path(name), **kwargs)
 
 
 def git_hash() -> str:
@@ -174,6 +222,32 @@ def cv_folds(n_samples: int, n_splits: int = 5, seed: int = 0):
                       random_state=seed).split(np.arange(n_samples)))
 
 
+SINE_ANCHOR = {"best_kta": 0.1975, "best_r2": 0.981,
+               "worst_kta": 0.0048, "worst_r2": -0.059}
+
+
+def ridge_test_r2(backend, circuit, train: RegressionDataset, test: RegressionDataset,
+            gram: np.ndarray | None = None) -> float:
+    from sklearn.kernel_ridge import KernelRidge
+    from sklearn.metrics import r2_score
+
+    if gram is None:
+        gram = backend.gram(circuit, train.X)
+    krr = KernelRidge(alpha=RIDGE_ALPHA, kernel="precomputed").fit(gram, train.y)
+    return float(r2_score(test.y, krr.predict(backend.cross_gram(circuit, test.X, train.X))))
+
+
+def check_sine_anchor(ktas, r2s=None) -> None:
+    ktas = np.asarray(ktas, dtype=float)
+    best, worst = int(np.argmax(ktas)), int(np.argmin(ktas))
+    assert abs(ktas[best] - SINE_ANCHOR["best_kta"]) < 1e-3, ktas[best]
+    assert abs(ktas[worst] - SINE_ANCHOR["worst_kta"]) < 1e-3, ktas[worst]
+    if r2s is not None:
+        r2s = np.asarray(r2s, dtype=float)
+        assert abs(r2s[best] - SINE_ANCHOR["best_r2"]) < 2e-3, r2s[best]
+        assert abs(r2s[worst] - SINE_ANCHOR["worst_r2"]) < 2e-3, r2s[worst]
+
+
 def cv_r2(K: np.ndarray, y: np.ndarray, folds=None, seed: int = 0) -> float:
     from sklearn.kernel_ridge import KernelRidge
     from sklearn.metrics import r2_score
@@ -193,8 +267,9 @@ __all__ = [
     "BALANCE_WEIGHTS", "PRODUCTION_WEIGHTS", "RIDGE_ALPHA",
     "RESULTS_DIR", "REPORT_FIG_DIR", "REPO_DIR",
     "ensure_dirs", "report_style", "save_fig", "show", "write_csv", "read_csv",
+    "result_path",
     "FIG_FORMATS", "FIG_DPI",
     "write_meta", "git_hash", "catalog_size", "space_size",
     "sine_split", "mof_split", "REFERENCE_SCALE", "BOUND_SIGMAS",
-    "cv_folds", "cv_r2",
+    "cv_folds", "cv_r2", "SINE_ANCHOR", "ridge_test_r2", "check_sine_anchor",
 ]

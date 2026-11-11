@@ -7,16 +7,15 @@ from itertools import groupby
 
 import numpy as np
 
-
-from qksearch.compare_kernels import draw_circuit
-from qksearch.enumerate_circuits import strip_identity
 from experiments import common
+from experiments.e5_benchmark import _r2, _rbf_gamma_cv
 from experiments.e10_rzz import (
     ENTANGLERS,
     N_QUBITS,
     _heuristic,
 )
-from experiments.e5_benchmark import _r2, _rbf_gamma_cv
+from qksearch.compare_kernels import draw_circuit
+from qksearch.enumerate_circuits import strip_identity
 from qksearch.gates import State
 from qksearch.iqp import angle_label, describe, iqp_circuit
 from qksearch.search import MctsSearch, search
@@ -71,36 +70,36 @@ def rbf_baseline(seed: int) -> float:
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--seed", type=int, default=0,
-                   help="split montré en détail (défaut : 0)")
+                   help="split shown in detail (default: 0)")
     p.add_argument("--seeds", type=int, default=0,
-                   help="splits du récapitulatif + référence RBF "
-                        "(défaut : 0, seul le circuit détaillé)")
+                   help="splits in the summary table, plus the RBF reference "
+                        "(default: 0, detailed circuit only)")
     p.add_argument("--budget", type=int, default=1000,
-                   help="itérations MCTS, comme E5 (défaut : 1000)")
+                   help="MCTS iterations, as in E5 (default: 1000)")
     p.add_argument("--no-fig", action="store_true",
-                   help="ne pas écrire le PNG du circuit")
+                   help="do not write the circuit PNG")
     p.add_argument("--fig-dir", default=FIG_DIR,
-                   help=f"dossier des PNG (défaut : {FIG_DIR})")
+                   help=f"PNG output directory (default: {FIG_DIR})")
     p.add_argument("--catalogs", default="all",
-                   help="catalogues comparés, parmi "
-                        f"{', '.join(CATALOGS)} (défaut : all)")
+                   help="catalogues to compare, among "
+                        f"{', '.join(CATALOGS)} (default: all)")
     args = p.parse_args()
 
     names = [n.strip() for n in args.catalogs.split(",") if n.strip()]
     unknown = [n for n in names if n not in CATALOGS]
     if unknown:
-        p.error(f"catalogue inconnu : {', '.join(unknown)} "
-                f"(attendu : {', '.join(CATALOGS)})")
+        p.error(f"unknown catalogue: {', '.join(unknown)} "
+                f"(expected: {', '.join(CATALOGS)})")
     catalogs = {n: CATALOGS[n] for n in names}
 
     t0 = time.time()
     for name, entanglers in catalogs.items():
         state, kta, r2, size, res = select(args.seed, entanglers, args.budget)
         print(f"\n=== split {args.seed} — catalogue {name} "
-              f"({size} portes : {', '.join(('rz',) + entanglers)})")
-        print(f"  circuit  : {describe(state) or 'vide'}")
+              f"({size} gates: {', '.join(('rz',) + entanglers)})")
+        print(f"  circuit  : {describe(state) or 'empty'}")
         print(f"  KTA train = {kta:+.4f}   R² test = {r2:+.4f}   "
-              f"({res.n_evaluated} circuits évalués)")
+              f"({res.n_evaluated} circuits evaluated)")
         print("\n" + draw(state))
         if not args.no_fig:
             os.makedirs(args.fig_dir, exist_ok=True)
@@ -113,10 +112,10 @@ def main() -> int:
     if args.seeds < 1:
         return 0
 
-    print(f"\n  référence RBF (γ par 5-fold CV) : R² test = "
+    print(f"\n  RBF reference (γ by 5-fold CV): test R² = "
           f"{rbf_baseline(args.seed):+.4f}")
 
-    print(f"\n=== {args.seeds} splits, KTA / R² / nb d'entangleurs")
+    print(f"\n=== {args.seeds} splits, KTA / R² / number of entanglers")
     print(f"{'seed':>5} | " + " | ".join(n.center(26) for n in catalogs))
     table = {name: [] for name in catalogs}
     for seed in range(args.seeds):
@@ -127,7 +126,7 @@ def main() -> int:
             table[name].append((kta, r2, n_ent))
             cells.append(f"{kta:+.4f} / {r2:+.4f} / {n_ent}")
         print(f"{seed:>5} | " + " | ".join(c.rjust(26) for c in cells))
-    print(f"{'méd.':>5} | " + " | ".join(
+    print(f"{'med.':>5} | " + " | ".join(
         f"{np.median([v[0] for v in table[n]]):+.4f} / "
         f"{np.median([v[1] for v in table[n]]):+.4f} / "
         f"{np.median([v[2] for v in table[n]]):.1f}".rjust(26)
@@ -135,7 +134,7 @@ def main() -> int:
     print()
     for name in catalogs:
         used = sum(1 for v in table[name] if v[2] > 0)
-        print(f"  catalogue {name:5s} : un entangleur sur {used}/{args.seeds} splits")
+        print(f"  catalogue {name:5s}: an entangler on {used}/{args.seeds} splits")
     print(f"  ({time.time() - t0:.1f}s)")
     return 0
 

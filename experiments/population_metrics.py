@@ -5,12 +5,12 @@ import os
 from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
 import numpy as np
 import pandas as pd
+from matplotlib.ticker import MaxNLocator
 
+from experiments.common import RESULTS_DIR, result_path
 from qksearch.compare_kernels import BASELINE, BLUE, FIG_DIR, GRID, INK, INK2, MUTED
-from experiments.common import RESULTS_DIR
 
 CSV_PATH = os.path.join(RESULTS_DIR, "population_mof.csv")
 FIG_PATH = os.path.join(FIG_DIR, "fig_population_metrics.png")
@@ -36,9 +36,8 @@ N_COLS = 3
 
 
 def load(path: str) -> pd.DataFrame:
-    if not os.path.exists(path):
-        raise FileNotFoundError(
-            f"{path} not found — run `python -m experiments.population_circuits` first")
+    if os.path.dirname(os.path.abspath(path)) == os.path.abspath(RESULTS_DIR):
+        path = result_path(os.path.basename(path))
     df = pd.read_csv(path)
     missing = [s.column for s in SPECS if s.column not in df.columns]
     if missing:
@@ -115,6 +114,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--bins", type=int, default=7,
                    help="histogram bins for the continuous metrics")
     p.add_argument("--out", default=FIG_PATH, help="figure to write")
+    p.add_argument("--no-show", action="store_true",
+                   help="do not open a window (the figure is still written)")
     return p.parse_args()
 
 

@@ -9,9 +9,19 @@ from qksearch.backend import NumpyBackend
 from qksearch.compare_kernels import RIDGE_ALPHA
 from qksearch.dataset import AngleScaler, RegressionDataset, sine_dataset
 from qksearch.dla import DlaCalculator
-from qksearch.enumerate_circuits import (MAX_DEPTH, N_FEATURES, N_QUBITS, N_TEST,
-                                N_TRAIN, NOISE_REG, SEED, DIM_MAX,
-                                enumerate_states, gate_set, strip_identity)
+from qksearch.enumerate_circuits import (
+    DIM_MAX,
+    MAX_DEPTH,
+    N_FEATURES,
+    N_QUBITS,
+    N_TEST,
+    N_TRAIN,
+    NOISE_REG,
+    SEED,
+    enumerate_states,
+    gate_set,
+    strip_identity,
+)
 from qksearch.iqp import IqpKernelHeuristic, describe, iqp_circuit
 from qksearch.metric import TargetAlignment
 
@@ -60,8 +70,10 @@ print("\n--- Spearman correlations with test R² ---")
 for name, v in (("KTA", kta), ("Var(K)", var), ("dim(DLA)", dim)):
     rho, p = spearmanr(v, r2)
     print(f"  {name:9s} ρ = {rho:+.3f}   (p = {p:.2g})")
-rho, p = spearmanr(var, kta); print(f"  Var vs KTA   ρ = {rho:+.3f} (p={p:.2g})")
-rho, p = spearmanr(dim, kta); print(f"  DLA vs KTA   ρ = {rho:+.3f} (p={p:.2g})")
+rho, p = spearmanr(var, kta)
+print(f"  Var vs KTA   ρ = {rho:+.3f} (p={p:.2g})")
+rho, p = spearmanr(dim, kta)
+print(f"  DLA vs KTA   ρ = {rho:+.3f} (p={p:.2g})")
 
 best_r2 = int(np.argmax(r2))
 print(f"\nbest absolute R²: #{best_r2+1} {rows[best_r2]['label']} "
@@ -98,7 +110,7 @@ print(f"  c* = {c_star[0]:.4f} → from there on, #{c_star[1]+1} "
       f"{rows[c_star[1]]['label'][:40]} takes the lead (R²={r2[c_star[1]]:+.3f})")
 
 print("\n--- amplitude of the terms over the 35 circuits (for w = 1) ---")
-print(f"  KTA          : [{kta.min():+.4f}, {kta.max():+.4f}]  spread {kta.ptp():.4f}"
+print(f"  KTA          : [{kta.min():+.4f}, {kta.max():+.4f}]  spread {np.ptp(kta):.4f}"
       f"   #1−#2 = {kta[0]-kta[1]:.4f}")
-print(f"  DLA penalty  : [{-dim.max():+.4f}, {-dim.min():+.4f}]  spread {dim.ptp():.4f}")
-print(f"  Var bonus    : [{4*var.min():+.4f}, {4*var.max():+.4f}]  spread {4*var.ptp():.4f}")
+print(f"  DLA penalty  : [{-dim.max():+.4f}, {-dim.min():+.4f}]  spread {np.ptp(dim):.4f}")
+print(f"  Var bonus    : [{4*var.min():+.4f}, {4*var.max():+.4f}]  spread {4*np.ptp(var):.4f}")

@@ -1,3 +1,5 @@
+"""Steady-state genetic algorithm on the integer genome of :mod:`qksearch.genome`."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -20,6 +22,11 @@ from .base import Heuristic, SearchStrategy
 
 @dataclass(frozen=True)
 class GenerationStats:
+    """Population statistics after one generation.
+
+    Best and mean fitness, mean pairwise L1 distance, cumulative evaluations.
+    """
+
     generation: int
     best: float
     mean: float
@@ -28,6 +35,17 @@ class GenerationStats:
 
 
 class GeneticSearch(SearchStrategy[State, GateOp]):
+    """Genetic algorithm over :class:`~qksearch.genome.GenomeSpec` genomes.
+
+    Each generation breeds ``len(population) - elitism`` children by tournament
+    selection, uniform crossover and step/reset mutation, repairs them to
+    respect the support and weight limits, then lets each child replace its
+    nearest (L1) non-elite member if it scores higher (deterministic crowding).
+
+    The ``initial`` state passed to :meth:`search` is ignored; one generation
+    counts as one expansion for the budget.
+    """
+
     path_following = False
 
     def __init__(self, spec: GenomeSpec, *, population: Sequence[Genome],
@@ -72,10 +90,12 @@ class GeneticSearch(SearchStrategy[State, GateOp]):
 
     @property
     def history(self) -> list[GenerationStats]:
+        """Statistics of each generation of the last run."""
         return self._history
 
     @property
     def best_genome(self) -> Optional[Genome]:
+        """Genome of the best state found by the last run."""
         return self._best_genome
 
     def _reset(self) -> None:
@@ -191,6 +211,7 @@ class GeneticSearch(SearchStrategy[State, GateOp]):
 def seed_population(spec: GenomeSpec, size: int, rng: np.random.Generator, *,
                     seeds: Sequence[Genome] = (), max_support: int = 6,
                     max_weight: Optional[int] = None) -> list[Genome]:
+    """Initial population: the given ``seeds`` completed with random genomes."""
     pop = [tuple(g) for g in seeds][:size]
     while len(pop) < size:
         pop.append(random_genome(spec, rng, max_support=max_support,

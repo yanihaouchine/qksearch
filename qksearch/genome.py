@@ -1,3 +1,11 @@
+"""Fixed-length integer encoding of layered IQP circuits, for the genetic algorithm.
+
+A genome stores one multiplicity per (layer, gate) gene: how many times an
+``rz``/``rzz`` data gate is repeated, or which power of a constant phase gate
+(``t``, ``cs``...) is applied. Diagonal gates commute within a layer, so this
+loses nothing; :func:`decode` puts the Hadamard layers back between layers.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -25,12 +33,15 @@ DEFAULT_DATA_CAP = 7
 
 
 def phase_order(name: str) -> int:
+    """Order of a phase gate in the group it generates (``t``: 8, ``s``: 4, ``z``: 2)."""
     _arity, k = PHASE_POWERS[name]
     return 8 // gcd(8, k)
 
 
 @dataclass(frozen=True)
 class GeneSpec:
+    """One gene: a gate, its maximum multiplicity ``cap`` (``2**w - 1``) and its layer."""
+
     op: GateOp
     cap: int
     layer: int
@@ -45,6 +56,7 @@ class GeneSpec:
 
     @property
     def width(self) -> int:
+        """Number of bits used by the gene."""
         return (self.cap + 1).bit_length() - 1
 
     @property
@@ -54,6 +66,8 @@ class GeneSpec:
 
 @dataclass(frozen=True)
 class GenomeSpec:
+    """Ordered list of genes, grouped by layer."""
+
     genes: tuple[GeneSpec, ...]
     n_qubits: int
     n_layers: int
@@ -74,6 +88,7 @@ class GenomeSpec:
 
     @property
     def n_bits(self) -> int:
+        """Total number of bits, i.e. ``log2`` of the size of the search space."""
         return sum(g.width for g in self.genes)
 
     @property
@@ -81,6 +96,7 @@ class GenomeSpec:
         return tuple(g.cap for g in self.genes)
 
     def layer_slice(self, layer: int) -> slice:
+        """Slice of the genes that belong to ``layer``."""
         lo = next(i for i, g in enumerate(self.genes) if g.layer == layer)
         hi = lo + sum(1 for g in self.genes if g.layer == layer)
         return slice(lo, hi)
@@ -89,6 +105,7 @@ class GenomeSpec:
         return (0,) * len(self.genes)
 
     def describe(self) -> str:
+        """Summary of the genes and bits per layer."""
         parts = []
         for layer in range(self.n_layers):
             sl = self.layer_slice(layer)
@@ -100,6 +117,7 @@ class GenomeSpec:
 
 def layer_gate_set(n_qubits: int, n_features: int,
                    phases: Sequence[str] = ()) -> ProductGateSet:
+    """Diagonal gates of one layer: ``rz``, ``rzz`` and the given phase gates."""
     specs = [GateSpec("rz", 1, uses_feature=True),
              GateSpec("rzz", 2, uses_feature=True, symmetric=True)]
     for name in phases:
@@ -115,6 +133,11 @@ def layer_gate_set(n_qubits: int, n_features: int,
 def iqp_genome_spec(n_qubits: int, n_features: int, *, n_layers: int = 2,
                     phases: Sequence[str] = ("t", "cs"),
                     data_cap: int = DEFAULT_DATA_CAP) -> GenomeSpec:
+    """Genome spec of an ``n_layers``-layer IQP circuit.
+
+    Constant phase gates are left out of the last layer, where they act on
+    the measured basis and cannot change the kernel.
+    """
     if phases and n_layers > 1 and n_features != n_qubits:
         raise ValueError(
             f"phase gates need n_features == n_qubits (got {n_features} and "
@@ -138,6 +161,7 @@ def _hadamard_layer(n_qubits: int) -> State:
 
 
 def expand(gene: GeneSpec, k: int) -> State:
+    """Gates encoded by multiplicity ``k`` of ``gene``."""
     if k == 0:
         return ()
     if k > gene.cap:
@@ -153,6 +177,7 @@ def expand(gene: GeneSpec, k: int) -> State:
 
 
 def decode(g: Genome, spec: GenomeSpec) -> State:
+    """Genome to circuit, Hadamard layers included between layers."""
     if len(g) != len(spec.genes):
         raise ValueError(f"genome of length {len(g)}, spec expects {len(spec.genes)}")
     h = _hadamard_layer(spec.n_qubits)
@@ -167,6 +192,7 @@ def decode(g: Genome, spec: GenomeSpec) -> State:
 
 
 def encode(state: State, spec: GenomeSpec) -> Genome:
+    """Inverse of :func:`decode`; raises ``ValueError`` if ``state`` does not fit ``spec``."""
     index = {(gene.layer, gene.op): i for i, gene in enumerate(spec.genes)}
     phases = {(gene.layer, gene.op[1]): i
               for i, gene in enumerate(spec.genes) if gene.is_phase}
@@ -210,6 +236,7 @@ def encode(state: State, spec: GenomeSpec) -> Genome:
 
 
 def to_int(g: Genome, spec: GenomeSpec) -> int:
+    """Pack a genome into an integer of ``spec.n_bits`` bits."""
     value = 0
     shift = 0
     for gene, k in zip(spec.genes, g):
@@ -221,6 +248,7 @@ def to_int(g: Genome, spec: GenomeSpec) -> int:
 
 
 def from_int(value: int, spec: GenomeSpec) -> Genome:
+    """Inverse of :func:`to_int`."""
     if not 0 <= value < (1 << spec.n_bits):
         raise ValueError(f"value out of [0, 2**{spec.n_bits})")
     out: list[int] = []
@@ -231,18 +259,22 @@ def from_int(value: int, spec: GenomeSpec) -> Genome:
 
 
 def weight(g: Genome, spec: GenomeSpec) -> int:
+    """Number of gates: data multiplicities, plus one per active phase gene."""
     return sum(1 if gene.is_phase and k else k for gene, k in zip(spec.genes, g))
 
 
 def support(g: Genome) -> int:
+    """Number of non-zero genes."""
     return sum(1 for k in g if k)
 
 
 def l1_distance(a: Genome, b: Genome) -> int:
+    """Sum of absolute differences of multiplicities."""
     return sum(abs(x - y) for x, y in zip(a, b))
 
 
 def n_phase_gates(g: Genome, spec: GenomeSpec) -> int:
+    """Number of active phase genes."""
     return sum(1 for gene, k in zip(spec.genes, g) if k and gene.is_phase)
 
 
@@ -250,6 +282,10 @@ def repair(g: Genome, spec: GenomeSpec, rng: np.random.Generator, *,
            max_support: Optional[int] = None,
            max_weight: Optional[int] = None,
            protect: Sequence[int] = ()) -> Genome:
+    """Randomly zero or decrement genes until the support and weight limits hold.
+
+    Genes in ``protect`` are touched last.
+    """
     out = list(g)
     kept = frozenset(protect)
 
@@ -275,6 +311,11 @@ def repair(g: Genome, spec: GenomeSpec, rng: np.random.Generator, *,
 def random_genome(spec: GenomeSpec, rng: np.random.Generator, *,
                   max_support: int = 6, max_weight: Optional[int] = None,
                   require_last_layer: bool = True) -> Genome:
+    """Random genome with between 1 and ``max_support`` active genes.
+
+    With ``require_last_layer``, at least one gene of the last layer is
+    active, so the circuit does not collapse to fewer layers.
+    """
     if not 1 <= max_support <= len(spec.genes):
         raise ValueError(f"max_support must lie in [1, {len(spec.genes)}]")
     size = int(rng.integers(1, max_support + 1))
@@ -297,6 +338,7 @@ def random_genome(spec: GenomeSpec, rng: np.random.Generator, *,
 
 
 def enumerate_genomes(spec: GenomeSpec, *, max_weight: int) -> Iterator[Genome]:
+    """Yield every genome whose :func:`weight` is at most ``max_weight``."""
     caps = spec.caps
     out = [0] * len(caps)
 

@@ -42,15 +42,11 @@ def _heuristic(train, phases=()):
 
 def _harvested(spec) -> list:
     import csv
-    import os
 
-    from qksearch.genome import encode
     from experiments.population_circuits import gate_set
+    from qksearch.genome import encode
 
-    path = os.path.join(common.RESULTS_DIR, "population_mof.csv")
-    if not os.path.exists(path):
-        print(f"  ! {path} absent — population entirely random")
-        return []
+    path = common.result_path("population_mof.csv")
     catalog = gate_set().catalog
     out = []
     with open(path) as f:
@@ -177,7 +173,7 @@ def run(modes: tuple[str, ...] = ()) -> None:
               f"{common.space_size(N_QUBITS, MAX_GATES)} circuits")
         assert hits >= 8, f"the GA misses the exact optimum too often: {hits}/{len(valid)}"
     else:
-        print("\n! valid_r1 absent — aucune validation contre l'optimum exact")
+        print("\n! valid_r1 missing: no validation against the exact optimum")
 
     phase = df[df["mode"] == "prod_r2_phase"]
     kept = int((phase["n_phase_gates"] > 0).sum())
@@ -255,8 +251,8 @@ def _cli_modes() -> tuple[str, ...]:
             continue
         unknown = [n for n in names if n not in MODES]
         if unknown:
-            raise SystemExit(f"mode inconnu : {', '.join(unknown)} "
-                             f"(attendu : {', '.join(MODES)})")
+            raise SystemExit(f"unknown mode: {', '.join(unknown)} "
+                             f"(expected: {', '.join(MODES)})")
         return names
     return ()
 

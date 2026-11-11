@@ -1,3 +1,5 @@
+"""Synthetic regression target ``y = prod_i sin(x_i) + noise``."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -6,6 +8,7 @@ from .base import RegressionDataset
 
 
 def sine_target(X: np.ndarray) -> np.ndarray:
+    """Noiseless target ``prod_i sin(x_i)``."""
     return np.sin(np.asarray(X, dtype=float)).prod(axis=1)
 
 
@@ -15,6 +18,7 @@ def sine_dataset(
     noise: float = 0.05,
     seed: int = 0,
 ) -> RegressionDataset:
+    """Uniform ``x`` in ``[-pi/2, pi/2]^d``, Gaussian noise, standardized targets."""
     if n_features < 1:
         raise ValueError("n_features must be >= 1")
     if noise < 0:

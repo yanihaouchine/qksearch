@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 import time
 
-
 from experiments import common
 
 CSV = "e3_expressivity.csv"
@@ -76,15 +75,10 @@ def run() -> None:
             })
             if (i + 1) % 200 == 0:
                 print(f"{space} {i + 1}/{len(states)} ({time.time() - t0:.1f}s)")
-        print(f"{space} fait ({time.time() - t0:.1f}s)")
+        print(f"{space} done ({time.time() - t0:.1f}s)")
 
     sine = [r for r in rows if r["space"] == "sine"]
-    best = max(sine, key=lambda r: r["kta"])
-    worst = min(sine, key=lambda r: r["kta"])
-    assert abs(best["kta"] - 0.1975) < 1e-3, best
-    assert abs(best["r2"] - 0.981) < 2e-3, best
-    assert abs(worst["kta"] - 0.0048) < 1e-3, worst
-    assert abs(worst["r2"] - (-0.059)) < 2e-3, worst
+    common.check_sine_anchor([r["kta"] for r in sine], [r["r2"] for r in sine])
 
     common.write_csv(CSV, rows)
     common.write_meta("e3_expressivity", time.time() - t0,

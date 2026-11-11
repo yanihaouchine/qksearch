@@ -1,3 +1,5 @@
+"""Harvest a diverse population of good circuits from probabilistic descents."""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -10,16 +12,30 @@ from .probabilistic import ProbabilisticSearch
 
 @dataclass(frozen=True)
 class Individual(Generic[S]):
+    """A state and its score."""
+
     state: S
     score: float
 
 
 def multiset_distance(a: Sequence[Hashable], b: Sequence[Hashable]) -> int:
+    """Size of the symmetric difference of two multisets."""
     ca, cb = Counter(a), Counter(b)
     return sum(((ca - cb) + (cb - ca)).values())
 
 
 class PopulationSearch(ProbabilisticSearch[S, E]):
+    """:class:`ProbabilisticSearch` that keeps every scored state in a pool.
+
+    Parameters
+    ----------
+    pad
+        Maps an incomplete state to a complete one (e.g. by appending identity
+        gates) so it can enter the pool; this is free extra harvest.
+    complete_only
+        Without ``pad``, keep only leaves in the pool.
+    """
+
     def __init__(self, *, pad: Optional[Callable[[S], S]] = None,
                  complete_only: bool = True, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -30,6 +46,7 @@ class PopulationSearch(ProbabilisticSearch[S, E]):
 
     @property
     def pool(self) -> dict[S, float]:
+        """Every state recorded during the last run, with its score."""
         return self._pool
 
     def _reset(self) -> None:
@@ -53,6 +70,13 @@ class PopulationSearch(ProbabilisticSearch[S, E]):
         distance: Optional[Callable[[Hashable, Hashable], float]] = None,
         min_distance: float = 1.0,
     ) -> list[Individual[S]]:
+        """Top-``size`` distinct states of the pool, best first.
+
+        States sharing the same ``key`` are deduplicated. If ``distance`` is
+        given, states closer than ``min_distance`` to an already selected one
+        are deferred, and only used to fill the population when needed
+        (their number is stored in ``n_relaxed``).
+        """
         if size < 1:
             raise ValueError(f"size must be >= 1, got {size}")
         self.n_relaxed = 0

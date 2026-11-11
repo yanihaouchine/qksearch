@@ -1,3 +1,14 @@
+"""Gate vocabulary and gate sets that define the circuit search space.
+
+A gate is a ``GateOp`` triple ``(name, qubits, features)``: ``features`` lists
+the input coordinates whose product is the rotation angle, or ``None`` for a
+constant gate. A circuit (``State``) is a tuple of such triples.
+
+Diagonal gates commute, so a set of diagonal gates is a multiset: a
+*canonical* :class:`ProductGateSet` only appends gates in catalogue order,
+which visits each multiset exactly once.
+"""
+
 from __future__ import annotations
 
 import random
@@ -33,15 +44,25 @@ RANDOM_ORDER = "random"
 
 
 class GateSet(Protocol):
+    """Which gates may be added to a circuit, and where."""
+
     def placements(self, state: State) -> Sequence[GateOp]:
+        """Gates that may be added to ``state``."""
         ...
 
     def insert(self, state: State, op: GateOp) -> State:
+        """Return ``state`` with ``op`` added."""
         ...
 
 
 @dataclass(frozen=True)
 class GateSpec:
+    """A gate type: name, number of qubits, and whether its angle reads the data.
+
+    ``symmetric`` gates act the same on ``(a, b)`` and ``(b, a)``, so only
+    one ordering of their qubits is enumerated.
+    """
+
     name: str
     arity: int
     uses_feature: bool
@@ -61,6 +82,10 @@ ENTANGLER_SPECS: dict[str, GateSpec] = {
 
 
 def resolve_order_seed(order_seed: OrderSeed) -> Optional[int]:
+    """Turn ``order_seed`` into the seed of the catalogue shuffle.
+
+    ``None`` keeps the declaration order, ``"random"`` draws a fresh seed.
+    """
     if order_seed is None:
         return None
     if order_seed == RANDOM_ORDER:
@@ -73,6 +98,22 @@ def resolve_order_seed(order_seed: OrderSeed) -> Optional[int]:
 
 
 class ProductGateSet:
+    """Every placement of every :class:`GateSpec` on the active qubits.
+
+    Feature ``i`` is mapped to qubit ``i``: gates that read the data are only
+    placed on the first ``n_features`` qubits.
+
+    Parameters
+    ----------
+    with_identity
+        Add an identity gate, so circuits shorter than the depth are reachable.
+    canonical
+        Restrict appends to catalogue order (default: when all gates are
+        diagonal). Each multiset of commuting gates is then visited once.
+    order_seed
+        Shuffle of the catalogue order; see :func:`resolve_order_seed`.
+    """
+
     def __init__(self, specs: Sequence[GateSpec], n_qubits: int, n_features: int,
                  with_identity: bool = False,
                  canonical: Optional[bool] = None,
@@ -121,6 +162,11 @@ class ProductGateSet:
                 for qubits in self._qubit_tuples(spec)]
 
     def placements(self, state: State) -> Sequence[GateOp]:
+        """Gates that may follow ``state``.
+
+        Canonical: the catalogue from the last gate onwards. Otherwise: every
+        gate except an immediate repeat of the last one.
+        """
         last = state[-1] if state else None
         if self.canonical:
             rank = self._rank.get(last) if last is not None else None
@@ -130,9 +176,11 @@ class ProductGateSet:
         return self._without.get(last, self._catalog)
 
     def free_placements(self, state: State) -> Sequence[GateOp]:
+        """Whole catalogue, ignoring the canonical order (used by path-following descents)."""
         return self._catalog
 
     def insert(self, state: State, op: GateOp) -> State:
+        """Insert ``op`` at its catalogue position (canonical) or append it."""
         if not self.canonical:
             return state + (op,)
         rank = self._rank.get(op)
@@ -145,6 +193,12 @@ class ProductGateSet:
 
 
 class LayeredGateSet:
+    """Diagonal layers separated by Hadamard layers, up to ``max_layers`` layers.
+
+    Within a layer, placements follow the canonical order of ``base``;
+    the Hadamard-layer pseudo-gate ``hl`` opens the next layer.
+    """
+
     def __init__(self, base: ProductGateSet, max_layers: int) -> None:
         if max_layers < 1:
             raise ValueError("max_layers must be >= 1")
@@ -162,6 +216,7 @@ class LayeredGateSet:
         return self._catalog
 
     def placements(self, state: State) -> Sequence[GateOp]:
+        """Canonical successors within the current layer, plus ``hl`` if a layer is left."""
         if not state or state[-1] == HADAMARD_LAYER_OP:
             return self.base.catalog
         ops = tuple(self.base.placements(state))
@@ -174,10 +229,12 @@ class LayeredGateSet:
 
 
 def layer_count(state: State) -> int:
+    """Number of diagonal layers in ``state``."""
     return 1 + sum(op == HADAMARD_LAYER_OP for op in state)
 
 
 def phase_power_specs() -> list[GateSpec]:
+    """Constant phase gates ``diag(1, e^{i k pi/4})`` and their controlled versions."""
     return [GateSpec(name, arity, uses_feature=False, symmetric=True)
             for name, (arity, _k) in PHASE_POWERS.items()]
 
@@ -187,6 +244,11 @@ def iqp_gate_set(n_qubits: int, n_features: int,
                  canonical: Optional[bool] = None,
                  order_seed: OrderSeed = None,
                  extra_entanglers: Sequence[str] = ()) -> ProductGateSet:
+    """Gate set of the diagonal part of an IQP circuit: ``rz`` and ``rzz``.
+
+    ``extra_entanglers`` adds Havlíček-style ``rzzh``/``rzzhn`` gates whose
+    angle is ``(pi - x_i)(pi - x_j)``.
+    """
     specs = [
         GateSpec("rz", 1, uses_feature=True),
         ENTANGLER_SPECS["rzz"],
@@ -206,6 +268,7 @@ def pauli_gate_set(n_qubits: int, n_features: int,
                    with_phase_powers: bool = False,
                    canonical: Optional[bool] = None,
                    order_seed: OrderSeed = None) -> ProductGateSet:
+    """Non-diagonal gate set ``rx``, ``ry``, ``rz``, ``rzz``, beyond the IQP family."""
     specs = [
         GateSpec("rx", 1, uses_feature=True),
         GateSpec("ry", 1, uses_feature=True),
@@ -220,5 +283,6 @@ def pauli_gate_set(n_qubits: int, n_features: int,
 
 def phase_power_gate_set(n_qubits: int, n_features: int = 0,
                          order_seed: OrderSeed = None) -> ProductGateSet:
+    """Gate set made only of constant phase gates."""
     return ProductGateSet(phase_power_specs(), n_qubits, n_features,
                           order_seed=order_seed)

@@ -6,12 +6,12 @@ import os
 import numpy as np
 from sklearn.metrics.pairwise import rbf_kernel
 
+from experiments.common import mof_split, space_size, write_csv
 from qksearch.backend import NumpyBackend
 from qksearch.compare_kernels import FIG_DIR, RIDGE_ALPHA, evaluate_regression, tune_rbf_gamma
 from qksearch.dataset import RegressionDataset
 from qksearch.dla import DlaCalculator
 from qksearch.enumerate_circuits import Row, fig_table, print_table, strip_identity
-from experiments.common import mof_split, space_size, write_csv
 from qksearch.expressibility import expressibility
 from qksearch.gates import IDENTITY_OP, GateSpec, ProductGateSet, State
 from qksearch.genome import decode, iqp_genome_spec, random_genome
@@ -195,11 +195,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--min-distance", type=int, default=MIN_DISTANCE,
                    help="minimum gate-multiset distance between two individuals")
     p.add_argument("--random", type=int, default=N_RANDOM, dest="n_random",
-                   help="circuits tires au hasard ajoutes a la population")
+                   help="random circuits added to the population")
     p.add_argument("--fig-rows", type=int, default=FIG_ROWS,
-                   help="lignes tracees dans la figure (le CSV les garde toutes)")
+                   help="rows drawn in the figure (the CSV keeps them all)")
     p.add_argument("--exhaustive", action="store_true",
                    help="also sweep the 8008 circuits to locate the population")
+    p.add_argument("--no-show", action="store_true",
+                   help="do not open a window (the figure is still written)")
     return p.parse_args()
 
 

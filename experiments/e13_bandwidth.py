@@ -72,7 +72,7 @@ def _check_reference(row: dict) -> None:
              & (df["seed"] == SEED)].iloc[0]
     assert ref["detail"] == row["detail"], (ref["detail"], row["detail"])
     assert abs(ref["kta_train"] - row["kta_train"]) < 1e-9
-    print(f"  recoupement E5/E8 (s = π/4) : {row['detail']}")
+    print(f"  cross-check with E5/E8 (s = π/4): {row['detail']}")
 
 
 def run() -> None:
@@ -82,7 +82,7 @@ def run() -> None:
         row = _search_at(scale)
         rows.append(row)
         print(f"s = {row['scale_over_pi']:.5f}π  KTA {row['kta_train']:+.4f}  "
-              f"R² {row['r2_test']:+.4f}  {row['n_gates']} portes "
+              f"R² {row['r2_test']:+.4f}  {row['n_gates']} gates "
               f"({row['n_entanglers']} rzz)  {row['detail']}  "
               f"({time.time() - t0:.1f}s)")
         if scale == REFERENCE:
@@ -91,7 +91,7 @@ def run() -> None:
     common.write_csv(CSV, rows)
 
     distinct = len({r["detail"] for r in rows})
-    print(f"\n{distinct} circuits distincts pour {len(rows)} bandes passantes")
+    print(f"\n{distinct} distinct circuits for {len(rows)} bandwidths")
     common.write_meta("e13_bandwidth", time.time() - t0, seed=SEED,
                       n_qubits=N_QUBITS, n_data_gates=N_DATA_GATES,
                       mcts_iterations=MCTS_ITERATIONS,
@@ -196,16 +196,15 @@ def plot() -> None:
         ax.set_title(f"$s = ${_scale_label(row['scale_over_pi'])}   ·   "
                      f"KTA {row['kta_train']:+.3f}   ·   "
                      f"$R^2$ test {row['r2_test']:+.3f}   ·   "
-                     f"{int(row['n_gates'])} portes",
+                     f"{int(row['n_gates'])} gates",
                      fontsize=9, loc="left", pad=5, color=common.INK)
 
     for ax in flat[n:]:
         ax.set_axis_off()
 
-    fig.suptitle("Circuit retenu par la recherche, bande passante par bande "
-                 "passante\n"
-                 f"(MCTS sur le KTA, {MCTS_ITERATIONS} itérations, MOF, "
-                 f"{N_QUBITS} qubits, {N_DATA_GATES} portes, seed {SEED})",
+    fig.suptitle("Circuit selected by the search, one bandwidth at a time\n"
+                 f"(MCTS on the KTA, {MCTS_ITERATIONS} iterations, MOF, "
+                 f"{N_QUBITS} qubits, {N_DATA_GATES} gates, seed {SEED})",
                  fontsize=11, y=0.997)
     fig.tight_layout(rect=(0, 0, 1, 0.965), h_pad=1.2, w_pad=1.0)
     common.save_fig(fig, "fig_e13_bandwidth")

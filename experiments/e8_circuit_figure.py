@@ -64,7 +64,7 @@ def run_and_plot() -> None:
     qc.draw(output="mpl", style=style, ax=ax, fold=-1)
     common.save_fig(fig, "fig_e8_circuit_mof")
     plt.close(fig)
-    print(f"circuit : {describe(layer)}  KTA={kta:+.4f}  R²={row['r2_test']:+.3f}")
+    print(f"circuit: {describe(layer)}  KTA={kta:+.4f}  R²={row['r2_test']:+.3f}")
 
 
 if __name__ == "__main__":

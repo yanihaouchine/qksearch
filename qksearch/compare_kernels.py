@@ -1,3 +1,9 @@
+"""Quantum versus classical (RBF) kernels on classification, regression and MOF data.
+
+Also hosts the shared colour palette and the plotting helpers used by the
+experiments. Run ``python -m qksearch.compare_kernels`` for the figures.
+"""
+
 from __future__ import annotations
 
 import os
@@ -29,12 +35,11 @@ from qksearch.dataset import (
     sine_dataset,
     sine_target,
 )
-from qksearch.gates import ANGLE_ENCODING, State
-from qksearch.gates import RANDOM_ORDER, OrderSeed
-from qksearch.iqp import (angle_label, build_heuristic, default_metric, describe,
-                 iqp_circuit)
+from qksearch.gates import ANGLE_ENCODING, RANDOM_ORDER, OrderSeed, State
+from qksearch.iqp import angle_label, build_heuristic, default_metric, describe, iqp_circuit
 from qksearch.metric import CenteredAlignment, Metric, TargetAlignment
-from qksearch.search import MctsSearch ,search
+from qksearch.search import MctsSearch, search
+
 N_QUBITS = 2
 N_DATA_GATES = 8
 N_TRAIN, N_TEST = 40, 80
@@ -49,11 +54,11 @@ FIG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 SURFACE, INK, INK2 = "#fcfcfb", "#0b0b0b", "#52514e"
 MUTED, GRID, BASELINE = "#898781", "#e1e0d9", "#c3c2b7"
-BLUE, RED = "#2a78d6", "#e34948"      
-NEUTRAL = "#f0efec"                    
+BLUE, RED = "#2a78d6", "#e34948"
+NEUTRAL = "#f0efec"
 SEQ_BLUE = ["#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7",
             "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281",
-            "#0d366b"]                
+            "#0d366b"]
 CMAP_SEQ = LinearSegmentedColormap.from_list("seq_blue", SEQ_BLUE)
 CMAP_DIV = LinearSegmentedColormap.from_list("div_br", [BLUE, NEUTRAL, RED])
 
@@ -96,14 +101,14 @@ def tune_rbf_gamma(train: BaseDataset, metric: Optional[Metric] = None) -> float
 
 
 def ideal_gram(y: np.ndarray) -> np.ndarray:
-   
+
     target = np.outer(y, y)
     return np.maximum(target, 0.0) / target.max()
 
 
 def evaluate(name: str, K_train: np.ndarray, K_test: np.ndarray,
              train: Dataset, test: Dataset) -> dict:
-   
+
     svm = SVC(kernel="precomputed").fit(K_train, train.y)
     return {
         "name": name,
@@ -115,7 +120,7 @@ def evaluate(name: str, K_train: np.ndarray, K_test: np.ndarray,
 
 def evaluate_regression(name: str, K_train: np.ndarray, K_test: np.ndarray,
                         train: RegressionDataset, test: RegressionDataset) -> dict:
-  
+
     krr = KernelRidge(alpha=RIDGE_ALPHA, kernel="precomputed").fit(K_train, train.y)
     return {
         "name": name,
@@ -129,7 +134,7 @@ def class_masks(y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def scatter_classes(ax, X, y, *, filled: bool = True, size: float = 48) -> None:
-   
+
     for mask, color in zip(class_masks(y), (BLUE, RED)):
         if filled:
             ax.scatter(X[mask, 0], X[mask, 1], s=size, c=color,
@@ -240,7 +245,7 @@ def rounded_bar(ax, x: float, height: float, width: float, color: str) -> None:
 
 @dataclass(frozen=True)
 class ScorePanel:
-   
+
 
     title: str
     key: str
@@ -252,7 +257,7 @@ class ScorePanel:
 
 def fig_scores(results: dict[str, dict], panels: Sequence[ScorePanel], path: str,
                suptitle: str) -> None:
-   
+
     names = list(results)
     colors = {n: BLUE if "IQP" in n else BASELINE for n in names}
 
@@ -265,7 +270,7 @@ def fig_scores(results: dict[str, dict], panels: Sequence[ScorePanel], path: str
                     ha="center", va="bottom", color=INK2, fontsize=10)
         ax.axhline(panel.ref, color=MUTED, lw=1, ls=(0, (4, 3)))
         x = len(names) - 0.45 if panel.ref_ha == "right" else -0.55
-       
+
         ax.text(x, max(panel.ref + 0.02, 0.12), panel.ref_label,
                 ha=panel.ref_ha, color=MUTED, fontsize=9)
         ax.set_title(panel.title, fontsize=11, pad=10)
@@ -335,7 +340,7 @@ def fig_circuit(state: State, n_qubits: int, n_features: int,
 
 def scatter_targets(ax, X: np.ndarray, y: np.ndarray, vmax: float, *,
                     filled: bool = True, size: float = 48):
-  
+
     return ax.scatter(
         X[:, 0], X[:, 1], c=y, cmap=CMAP_DIV, vmin=-vmax, vmax=vmax,
         s=size if filled else size * 0.62, marker="o" if filled else "D",
@@ -398,7 +403,7 @@ def fig_dataset_mof(raw: RegressionDataset, n_train: int, path: str) -> None:
 
 def fig_surfaces(train: RegressionDataset, fields: dict[str, np.ndarray],
                  notes: dict[str, str], lim: tuple[float, float], path: str) -> None:
-   
+
     gx, gy, _ = decision_grid(lim)
     vmax = max(float(np.abs(Z).max()) for Z in fields.values())
     levels = np.linspace(-vmax, vmax, 17)
@@ -425,7 +430,7 @@ def fig_surfaces(train: RegressionDataset, fields: dict[str, np.ndarray],
 
 def fig_predictions(test: RegressionDataset, preds: dict[str, np.ndarray],
                     r2: dict[str, float], path: str) -> None:
-   
+
     lo = min(float(test.y.min()), *(float(p.min()) for p in preds.values())) - 0.2
     hi = max(float(test.y.max()), *(float(p.max()) for p in preds.values())) + 0.2
     fig, axes = plt.subplots(1, len(preds), figsize=(9.6, 4.8), constrained_layout=True)
@@ -449,7 +454,7 @@ def fig_predictions(test: RegressionDataset, preds: dict[str, np.ndarray],
 
 
 def run_classification() -> None:
-   
+
     print("\n=== Classification — “two moons” dataset ===")
     raw = moons_dataset(n_samples=N_TRAIN + N_TEST, noise=NOISE, seed=SEED)
     scaler = AngleScaler.fit(raw.X[:N_TRAIN])
@@ -515,7 +520,7 @@ def run_classification() -> None:
 
 
 def run_regression() -> None:
-   
+
     print("\n=== Regression — “product of sines” dataset ===")
     raw = sine_dataset(n_samples=N_TRAIN + N_TEST, n_features=2,
                        noise=NOISE_REG, seed=SEED)
@@ -552,7 +557,7 @@ def run_regression() -> None:
     pad = 0.25
     lim = (float(data.X.min()) - pad, float(data.X.max()) + pad)
     _, _, pts = decision_grid(lim)
-   
+
     truth = sine_target(scaler.inverse_transform(pts))
     fields = {
         "Ground truth  y = sin(x₁)·sin(x₂)": ((truth - truth.mean()) / truth.std())

@@ -106,7 +106,7 @@ def run() -> None:
                     "r2_test": _r2(K_train, K_test, train, test),
                     "n_evaluated": 0, "detail": detail,
                 })
-            print(f"{dataset} seed {seed} fait ({time.time() - t0:.1f}s)")
+            print(f"{dataset} seed {seed} done ({time.time() - t0:.1f}s)")
 
     common.write_csv(CSV, rows)
     common.write_meta("e5_benchmark", time.time() - t0, seeds=SEEDS,

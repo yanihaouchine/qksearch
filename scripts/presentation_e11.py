@@ -5,9 +5,8 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 
-from experiments.common import RESULTS_DIR as RESULTS
+from experiments.common import read_csv
 from qksearch.compare_kernels import BASELINE, BLUE, FIG_DIR, GRID, INK, INK2, MUTED, RED, SURFACE
 
 MODES = ("valid_r1", "prod_r2", "prod_r2_phase")
@@ -40,12 +39,12 @@ TEXT = {
         "f3_gates": "porte",
         "f3_caption": ("Chaque champ a une largeur fixe, donc tout entier est un circuit\n"
                        "valide : mutation et croisement ne peuvent pas sortir de l'espace."),
-            "f4_title": "Les circuits trouvés par l'algorithme",
+        "f4_title": "Les circuits trouvés par l'algorithme",
         "f4_sub": ("Le meilleur circuit de chaque famille, sur les 10 tirages.\n"
                    "Bleu : portes pilotées par les données. Rouge : portes de phase fixes."),
         "f4_wall": "H",
         "f4_metrics": "KTA {kta:+.3f}   R² {r2:+.3f}",
-},
+    },
     "en": {
         "modes": ("1 layer\nrz, rzz", "2 layers\nrz, rzz", "2 layers\n+ T, CS gates"),
         "f1_title": "The genetic algorithm recovers the exact optimum",
@@ -73,7 +72,7 @@ TEXT = {
         "f3_gates": "gate",
         "f3_caption": ("Every field has a fixed width, so any integer is a valid circuit:\n"
                        "mutation and crossover cannot leave the space."),
-            "f4_title": "The circuits the algorithm found",
+        "f4_title": "The circuits the algorithm found",
         "f4_sub": ("Best circuit of each family, over the 10 seeds.\n"
                    "Blue: data-driven gates. Red: fixed phase gates."),
         "f4_wall": "H",
@@ -366,44 +365,39 @@ def fig_circuits(best, t, dpi: int) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--lang", choices=("fr", "en"), default="fr")
+    p.add_argument("--lang", choices=("fr", "en"), default="en")
     p.add_argument("--figures", default="circuits",
-                   help="figures à produire parmi validation,kta,genome,circuits "
-                        "— ou 'all' pour les quatre")
+                   help="figures to draw among validation,kta,genome,circuits, "
+                        "or 'all' for the four")
     p.add_argument("--modes", default=",".join(MODES),
-                   help="modes à afficher, séparés par des virgules")
+                   help="comma-separated modes to show")
     p.add_argument("--dpi", type=int, default=200,
-                   help="200 suffit pour un projecteur, 300 pour l'impression")
+                   help="200 is enough for a projector, 300 for print")
     args = p.parse_args()
 
-    for name in ("e11_genetic.csv", "e11_best.csv"):
-        if not os.path.exists(os.path.join(RESULTS, name)):
-            raise SystemExit(
-                f"{name} manquant — lancer d'abord :\n"
-                f"    python -m experiments 11")
 
     wanted = [m for m in args.modes.split(",") if m]
     unknown = [m for m in wanted if m not in MODES]
     if unknown:
-        raise SystemExit(f"mode inconnu : {', '.join(unknown)} "
-                         f"(attendu : {', '.join(MODES)})")
+        raise SystemExit(f"unknown mode: {', '.join(unknown)} "
+                         f"(expected: {', '.join(MODES)})")
 
     screen_style()
     t = TEXT[args.lang]
-    curves = pd.read_csv(os.path.join(RESULTS, "e11_genetic.csv"))
-    best = pd.read_csv(os.path.join(RESULTS, "e11_best.csv"))
+    curves = read_csv("e11_genetic.csv")
+    best = read_csv("e11_best.csv")
     curves = curves[curves["mode"].isin(wanted)]
     best = best[best["mode"].isin(wanted)]
     if best.empty:
-        raise SystemExit(f"aucune donnée pour {args.modes} dans les CSV")
+        raise SystemExit(f"no data for {args.modes} in the CSV files")
 
     known = ("validation", "kta", "genome", "circuits")
     figures = known if args.figures == "all" else tuple(
         f for f in args.figures.split(",") if f)
     unknown = [f for f in figures if f not in known]
     if unknown:
-        raise SystemExit(f"figure inconnue : {', '.join(unknown)} "
-                         f"(attendu : {', '.join(known)}, ou 'all')")
+        raise SystemExit(f"unknown figure: {', '.join(unknown)} "
+                         f"(expected: {', '.join(known)}, or 'all')")
 
     if "validation" in figures and "valid_r1" in wanted:
         fig_validation(curves, best, t, args.dpi)

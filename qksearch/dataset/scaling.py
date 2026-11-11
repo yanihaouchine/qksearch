@@ -1,3 +1,5 @@
+"""Map raw features to rotation angles."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,6 +14,13 @@ D = TypeVar("D", bound=BaseDataset)
 
 @dataclass(frozen=True)
 class AngleScaler:
+    """Standardize each feature, multiply by ``scale`` and clip to ``[-bound, bound]``.
+
+    Fit it on the training set only, then :meth:`apply` it to every split. The
+    scale is the kernel bandwidth: small angles give a nearly constant kernel,
+    large ones a nearly diagonal one.
+    """
+
     mean: np.ndarray
     std: np.ndarray
     scale: float = float(np.pi / 4)
@@ -25,6 +34,7 @@ class AngleScaler:
         scale: float = float(np.pi / 4),
         bound: float = float(np.pi / 2),
     ) -> AngleScaler:
+        """Estimate the per-feature mean and standard deviation of ``X``."""
         X = np.asarray(X, dtype=float)
         if X.ndim != 2:
             raise ValueError(f"X must be 2D, got ndim={X.ndim}")
@@ -41,6 +51,7 @@ class AngleScaler:
         return cls(X.mean(axis=0), std, float(scale), float(bound))
 
     def transform(self, X: np.ndarray) -> np.ndarray:
+        """Features to angles."""
         X = np.asarray(X, dtype=float)
         if X.ndim != 2:
             raise ValueError(f"X must be 2D, got ndim={X.ndim}")
@@ -51,6 +62,7 @@ class AngleScaler:
         return np.clip((X - self.mean) / self.std * self.scale, -self.bound, self.bound)
 
     def inverse_transform(self, angles: np.ndarray) -> np.ndarray:
+        """Angles to features (exact only for unclipped values)."""
         angles = np.asarray(angles, dtype=float)
         if angles.ndim != 2:
             raise ValueError(f"angles must be 2D, got ndim={angles.ndim}")
@@ -61,4 +73,5 @@ class AngleScaler:
         return angles / self.scale * self.std + self.mean
 
     def apply(self, data: D) -> D:
+        """Same dataset type, with transformed features."""
         return type(data)(self.transform(data.X), data.y)

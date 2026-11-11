@@ -1,3 +1,5 @@
+"""Best-first search: always expand the best state seen so far."""
+
 from __future__ import annotations
 
 import heapq
@@ -7,6 +9,8 @@ from .base import E, S, SearchStrategy
 
 
 class BestFirstSearch(SearchStrategy[S, E]):
+    """Expand states in decreasing score order from a priority queue (ties: oldest first)."""
+
     def search(self, initial, heuristic, *, budget=None):
         self._reset()
         counter = itertools.count()

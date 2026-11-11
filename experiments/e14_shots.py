@@ -83,23 +83,12 @@ def _kta_batch(uppers: np.ndarray, y: np.ndarray) -> np.ndarray:
     return num / den
 
 
-def _reference(dataset: str) -> tuple[np.ndarray, np.ndarray]:
-    df = common.read_csv("e13_space.csv")
-    sub = df[(df["dataset"] == dataset)
-             & np.isclose(df["scale_over_pi"], REFERENCE / np.pi)]
-    kta = sub.pivot_table(index="seed", columns="circuit_id", values="kta")
-    r2 = sub.pivot_table(index="seed", columns="circuit_id", values="r2")
-    assert list(kta.index) == sorted(sub["seed"].unique())
-    return kta.to_numpy(), r2.to_numpy()
-
-
-def _check_against_e3(dataset: str, ktas: np.ndarray) -> None:
-    df = common.read_csv("e3_expressivity.csv")
-    ref = df[df["space"] == dataset].sort_values("circuit_id")["kta"].to_numpy()
-    assert len(ref) == len(ktas), (dataset, len(ref), len(ktas))
-    gap = float(np.abs(ref - ktas).max())
-    assert gap < 1e-9, f"{dataset}: E14 diverges from E3 by {gap:.2e}"
-    print(f"  recoupement E3 ({dataset}) : écart max {gap:.2e}")
+def _exact_r2(heuristic, states, train, test) -> np.ndarray:
+    backend = heuristic.backend
+    return np.array([
+        common.ridge_test_r2(backend, heuristic.circuit(state), train, test,
+                             gram=heuristic.evaluator.gram(state))
+        for state in states])
 
 
 def _check_kta_paths(heuristic, states, y, ktas: np.ndarray) -> None:
@@ -122,9 +111,10 @@ def _check_sampler(upper: np.ndarray, shots: int, n: int) -> None:
 
 
 def _run_rank() -> tuple[list[dict], list[dict]]:
+    from scipy.stats import spearmanr
+
     from qksearch.enumerate_circuits import strip_identity
     from qksearch.iqp import describe
-    from scipy.stats import spearmanr
 
     rows: list[dict] = []
     noise: list[dict] = []
@@ -133,11 +123,10 @@ def _run_rank() -> tuple[list[dict], list[dict]]:
         gs = _gate_set(n)
         states = _enumerate(gs, SPACE_DEPTH)
         assert len(states) == common.space_size(n, SPACE_DEPTH)
-        ref_kta, ref_r2 = _reference(dataset)
-        details = [describe(strip_identity(s)) or "identité" for s in states]
+        details = [describe(strip_identity(s)) or "identity" for s in states]
 
         for seed in SEEDS:
-            train, _ = _split(dataset, seed)
+            train, test = _split(dataset, seed)
             heuristic = _heuristic(train, gs, n, SPACE_DEPTH)
             nt = len(train.y)
             iu = np.triu_indices(nt, k=1)
@@ -146,15 +135,14 @@ def _run_rank() -> tuple[list[dict], list[dict]]:
                 uppers[ci] = np.clip(heuristic.evaluator.gram(state)[iu],
                                      0.0, 1.0)
             kta_exact = _kta_batch(uppers, train.y)
-            r2_exact = ref_r2[seed]
+            r2_exact = _exact_r2(heuristic, states, train, test)
 
             if seed == SEEDS[0]:
                 _check_kta_paths(heuristic, states[:20], train.y, kta_exact[:20])
                 _check_sampler(uppers[0], 100, nt)
-            if seed == 0:
-                _check_against_e3(dataset, kta_exact)
-            gap = float(np.abs(ref_kta[seed] - kta_exact).max())
-            assert gap < 1e-9, f"{dataset} seed {seed}: E13 gap {gap:.2e}"
+            if seed == 0 and dataset == "sine":
+                common.check_sine_anchor(kta_exact, r2_exact)
+                print("  sine seed 0 matches the E3 anchor")
 
             i_best_kta = int(np.argmax(kta_exact))
             top_exact = set(np.argsort(kta_exact)[::-1][:TOP_K].tolist())
@@ -210,7 +198,7 @@ def _run_rank() -> tuple[list[dict], list[dict]]:
                                 "rank_exact": int(rank_of[ci]),
                                 "rank_noisy": int(rank_noisy[ci]),
                             })
-            print(f"  axe A : {dataset} seed {seed} ({time.time() - t0:.0f}s)")
+            print(f"  axis A: {dataset} seed {seed} ({time.time() - t0:.0f}s)")
     return rows, noise
 
 
@@ -245,10 +233,10 @@ def _print_rankings(sub) -> dict:
         measured = out["by_shots"][str(int(shots))]
         hits = sum(1 for m in measured
                    if m["rank_exact"] < TOP_K)
-        print(f"\n  M = {int(shots)} — {hits}/{TOP_K} du top-{TOP_K} exact "
-              f"retrouvés (tirage rep = 0)")
-        print(f"    {'rang':>4s}  {'classement exact':<{width}s}  KTA     "
-              f"| {'classement mesuré':<{width}s}  KTA     rang exact")
+        print(f"\n  M = {int(shots)} — {hits}/{TOP_K} of the exact top-{TOP_K} "
+              f"recovered (repetition 0)")
+        print(f"    {'rank':>4s}  {'exact ranking':<{width}s}  KTA     "
+              f"| {'measured ranking':<{width}s}  KTA     exact rank")
         for k, (e, m) in enumerate(zip(out["exact"], measured)):
             flag = " " if m["rank_exact"] < TOP_K else "*"
             print(f"    {k:>4d}  {labels[e['circuit_id']]:<{width}s}  "
@@ -260,7 +248,7 @@ def _print_rankings(sub) -> dict:
 def _summarize(df_rank, df_noise) -> dict:
     out: dict = {"rank": {}, "noise": {}, "ranking": {}}
 
-    print("\n— axe A : le classement du KTA sous bruit de mesure —")
+    print("\n— axis A: KTA ranking under shot noise —")
     for dataset in DATASETS:
         sub = df_rank[df_rank["dataset"] == dataset]
         exact_pick = (sub[~np.isfinite(sub["shots"])]
@@ -286,10 +274,10 @@ def _summarize(df_rank, df_noise) -> dict:
             "by_shots": stats, "shots_star": star,
             "regret_proxy": float(sub["regret_proxy"].median()),
         }
-        print(f"\n{dataset} : M* = {star}, "
-              f"regret de proxy (constante, E3/E13) "
+        print(f"\n{dataset}: M* = {star}, "
+              f"proxy regret (fixed ridge) "
               f"{sub['regret_proxy'].median():+.4f}")
-        print("  M       ρ      top-10  rang du vrai   accord   regret sél.")
+        print("  M       ρ      top-10  rank of best   agreement  sel. regret")
         for shots in [*finite, float("inf")]:
             key = "inf" if not np.isfinite(shots) else str(int(shots))
             s = stats[key]
@@ -297,7 +285,7 @@ def _summarize(df_rank, df_noise) -> dict:
                   f"{s['rank_of_best']:11.1f}  {s['agreement']:6.0%}  "
                   f"{s['regret_select']:+.4f}")
 
-    print("\n— le bruit du KTA : un biais en 1/M, une dispersion en 1/√M —")
+    print("\n— KTA noise: a 1/M bias, a 1/√M spread —")
     for dataset in DATASETS:
         sub = df_noise[df_noise["dataset"] == dataset]
         finite = sorted(s for s in sub["shots"].unique() if np.isfinite(s))
@@ -323,17 +311,17 @@ def _summarize(df_rank, df_noise) -> dict:
             "bias_slope": b_slope, "sd_slope": s_slope,
         }
         shown = (f"M^{b_slope:+.2f}" if np.isfinite(b_slope)
-                 else f"non résolu ({int(resolved.sum())} points sur {len(x)})")
-        print(f"  {dataset:5s} biais ∝ {shown} "
-              f"(attendu −1), dispersion ∝ M^{s_slope:+.2f} (attendu −0,5)")
+                 else f"unresolved ({int(resolved.sum())} points out of {len(x)})")
+        print(f"  {dataset:5s} bias ∝ {shown} "
+              f"(expected −1), spread ∝ M^{s_slope:+.2f} (expected −0.5)")
         if not SMOKE:
             assert np.isnan(b_slope) or -1.3 < b_slope < -0.7, b_slope
             assert -0.65 < s_slope < -0.35, s_slope
 
-    print("\n— les deux classements, côte à côte —")
+    print("\n— both rankings, side by side —")
     for dataset in DATASETS:
         sub = df_noise[df_noise["dataset"] == dataset]
-        print(f"\n{dataset} :")
+        print(f"\n{dataset}:")
         out["ranking"][dataset] = _print_rankings(sub)
     return out
 
@@ -342,7 +330,7 @@ def run() -> None:
     import pandas as pd
 
     t0 = time.time()
-    print("— axe A : classement —")
+    print("— axis A: ranking —")
     rows_rank, rows_noise = _run_rank()
     common.write_csv(CSV_RANK, rows_rank)
     common.write_csv(CSV_NOISE, rows_noise)
@@ -358,8 +346,8 @@ def run() -> None:
                       summary=summary)
 
 
-TITLES = {"sine": "sine synthétique (2 qubits)",
-          "mof": "MOF, capacité H$_2$ (4 qubits)"}
+TITLES = {"sine": "synthetic sine (2 qubits)",
+          "mof": "MOF, H$_2$ uptake (4 qubits)"}
 
 
 def _short(dataset: str) -> str:
@@ -395,9 +383,9 @@ def plot() -> None:
                 label=f"{_short(dataset)}, top-10")
     ax.axhline(1.0, color=common.BASELINE, lw=0.7, ls=":")
     ax.set_xscale("log")
-    ax.set_xlabel("shots par entrée du Gram $M$")
-    ax.set_ylabel("accord avec le classement exact")
-    ax.set_title("Le classement survit au bruit", fontsize=8.5)
+    ax.set_xlabel("shots per Gram entry $M$")
+    ax.set_ylabel("agreement with the exact ranking")
+    ax.set_title("The ranking survives the noise", fontsize=8.5)
     ax.grid(True, alpha=0.4)
     ax.legend(fontsize=6, loc="lower right")
 
@@ -414,8 +402,8 @@ def plot() -> None:
     ax.set_xlim(*lim)
     ax.set_ylim(bottom=0.0)
     ax.set_xlabel("KTA exact")
-    ax.set_ylabel("KTA mesuré")
-    ax.set_title(f"{_short(main)} : le bruit se moyenne", fontsize=8.5)
+    ax.set_ylabel("measured KTA")
+    ax.set_title(f"{_short(main)}: the noise averages out", fontsize=8.5)
     ax.grid(True, alpha=0.4)
     ax.legend(fontsize=6.5, loc="upper left", markerscale=2)
 
@@ -429,9 +417,9 @@ def plot() -> None:
             ls="--")
     ax.set_xlim(0, n_circuits)
     ax.set_ylim(0, n_circuits)
-    ax.set_xlabel("rang exact")
-    ax.set_ylabel("rang mesuré")
-    ax.set_title(f"{_short(main)} : le classement, rang à rang", fontsize=8.5)
+    ax.set_xlabel("exact rank")
+    ax.set_ylabel("measured rank")
+    ax.set_title(f"{_short(main)}: the ranking, rank by rank", fontsize=8.5)
     ax.grid(True, alpha=0.4)
     ax.legend(fontsize=6.5, loc="lower right", markerscale=2)
 
@@ -453,9 +441,9 @@ def plot() -> None:
     ax.invert_yaxis()
     ax.set_xscale("symlog", linthresh=TOP_K)
     ax.set_xlim(0, n_circuits)
-    ax.set_xlabel("rang mesuré (symlog)")
-    ax.set_ylabel("rang exact")
-    ax.set_title(f"Le top-{TOP_K} exact, vu par la mesure", fontsize=8.5)
+    ax.set_xlabel("measured rank (symlog)")
+    ax.set_ylabel("exact rank")
+    ax.set_title(f"The exact top-{TOP_K}, as seen by measurement", fontsize=8.5)
     ax.grid(True, alpha=0.4, axis="x")
     ax.legend(fontsize=6.5, loc="lower right", framealpha=0.9)
     fig.tight_layout()

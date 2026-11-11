@@ -1,9 +1,12 @@
+"""Geometric difference between a quantum and a classical kernel (Huang et al., 2021)."""
+
 from __future__ import annotations
 
 import numpy as np
 
 
 def normalize_trace(K: np.ndarray) -> np.ndarray:
+    """Rescale ``K`` so that its trace equals its size."""
     trace = float(np.trace(K))
     if trace <= 0.0:
         return np.asarray(K, dtype=float)
@@ -17,6 +20,11 @@ def _sqrtm_psd(K: np.ndarray) -> np.ndarray:
 
 def geometric_difference(K_q: np.ndarray, K_c: np.ndarray, *,
                          lam: float = 1e-6) -> float:
+    """``g(K_c || K_q) = sqrt(||sqrt(K_q) (K_c + lam I)^-1 sqrt(K_q)||_inf)``.
+
+    Small values mean the classical kernel can learn anything the quantum
+    kernel can, with comparable data; a quantum advantage needs ``g`` large.
+    """
     Kq = normalize_trace(K_q)
     Kc = normalize_trace(K_c)
     S = _sqrtm_psd(Kq)

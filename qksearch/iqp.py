@@ -1,3 +1,9 @@
+"""IQP feature maps ``H^n D(x) H^n``, where ``D(x)`` is the searched diagonal part.
+
+:func:`build_heuristic` is the main entry point: it assembles the gate set,
+backend, metric and regularizer of an IQP circuit search.
+"""
+
 from __future__ import annotations
 
 from typing import Callable, Optional, Sequence
@@ -29,10 +35,12 @@ from qksearch.search import (
 
 
 def hadamard_layer(n_qubits: int) -> State:
+    """One Hadamard gate per qubit."""
     return tuple(("h", (q,), None) for q in range(n_qubits))
 
 
 def iqp_circuit(diagonal: State, n_qubits: int) -> State:
+    """Sandwich a diagonal circuit between two Hadamard layers."""
     h = hadamard_layer(n_qubits)
     return h + diagonal + h
 
@@ -45,6 +53,7 @@ def angle_label(name: str, f: tuple[int, ...]) -> str:
 
 
 def describe(state: State) -> str:
+    """Human-readable one-line description of a circuit, e.g. ``rz(0)·x0 · rzz(0,1)·x0x1``."""
     parts = []
     for name, qubits, f in state:
         q = ",".join(map(str, qubits))
@@ -54,6 +63,7 @@ def describe(state: State) -> str:
 
 
 def show(name: str, result: SearchResult[State], heuristic: IqpKernelHeuristic) -> None:
+    """Print a search result: score, regularization, cost and circuit."""
     best = result.best_state
     full = iqp_circuit(best, heuristic.n_qubits) if best is not None else None
     detail = ""
@@ -69,6 +79,8 @@ def show(name: str, result: SearchResult[State], heuristic: IqpKernelHeuristic) 
 
 
 class IqpKernelHeuristic(QuantumKernelHeuristic):
+    """:class:`QuantumKernelHeuristic` whose circuits are wrapped in Hadamard layers."""
+
     def __init__(
         self,
         gate_set,
@@ -95,6 +107,7 @@ DEFAULT_WEIGHTS: dict[str, float] = {"dla": 1.0, "variance": 0.5, "none": 0.0}
 
 
 def default_metric(data: BaseDataset) -> Metric:
+    """Kernel-target alignment."""
     return TargetAlignment()
 
 
@@ -109,6 +122,28 @@ def build_heuristic(
     order_seed: OrderSeed = None,
     extra_entanglers: Sequence[str] = (),
 ) -> IqpKernelHeuristic:
+    """Search problem over IQP circuits with ``n_data_gates`` diagonal gates.
+
+    Parameters
+    ----------
+    data
+        Training set; its features are encoded as rotation angles.
+    n_qubits
+        Width of the circuit (feature ``i`` goes to qubit ``i``).
+    n_data_gates
+        Depth of a complete circuit.
+    regularization, weight
+        ``"dla"``, ``"variance"`` or ``"none"``; disabled when ``weight == 0``.
+    backend
+        Simulator; default: :class:`~qksearch.backend.QiskitBackend`
+        (pass :class:`~qksearch.backend.NumpyBackend` for speed).
+    metric
+        Gram-matrix score; default: :class:`~qksearch.metric.TargetAlignment`.
+    order_seed
+        Shuffle of the canonical gate order (see :mod:`qksearch.gates`).
+    extra_entanglers
+        Additional two-qubit gates (``"rzzh"``, ``"rzzhn"``).
+    """
     if regularization not in REGULARIZERS:
         raise ValueError(f"unknown regularization: {regularization!r} "
                          f"(expected: {', '.join(REGULARIZERS)})")
@@ -131,6 +166,7 @@ def build_heuristic(
 
 
 def main(order_seed: OrderSeed = RANDOM_ORDER) -> None:
+    """Toy demo: greedy search with each regularizer on a 2-qubit problem."""
     n_qubits = 2
     n_data_gates = 6
 

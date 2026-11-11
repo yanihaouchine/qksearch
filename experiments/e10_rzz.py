@@ -36,8 +36,8 @@ def _heuristic(train, entanglers):
 
 
 def _row(catalog, protocol, seed, state, heuristic, train, test, n_evaluated):
-    from qksearch.enumerate_circuits import strip_identity
     from experiments.e5_benchmark import _r2
+    from qksearch.enumerate_circuits import strip_identity
     from qksearch.iqp import describe, iqp_circuit
 
     circuit = iqp_circuit(state, N_QUBITS)
@@ -81,7 +81,7 @@ def run() -> None:
                          MctsSearch(n_iterations=MCTS_ITERATIONS, seed=seed))
             rows.append(_row(catalog, "mcts", seed, res.best_state, heuristic,
                              train, test, res.n_evaluated))
-        print(f"{catalog:9s} ({sizes[catalog]:2d} portes) fait "
+        print(f"{catalog:9s} ({sizes[catalog]:2d} gates) done "
               f"({time.time() - t0:.1f}s)")
 
     common.write_csv(CSV, rows)
@@ -90,8 +90,8 @@ def run() -> None:
 
     df = pd.DataFrame(rows)
     medians: dict[str, dict] = {}
-    print(f"\n{'catalogue':>10} {'protocole':>11} {'KTA méd.':>9} {'R² méd.':>8} "
-          f"{'circuits à ≥1 entangleur':>26}")
+    print(f"\n{'catalogue':>10} {'protocol':>11} {'med. KTA':>9} {'med. R²':>8} "
+          f"{'circuits with ≥1 entangler':>26}")
     for (catalog, protocol), sub in df.groupby(["catalog", "protocol"]):
         n_ent = int((sub["n_entanglers"] > 0).sum())
         medians[f"{catalog}/{protocol}"] = {
@@ -110,12 +110,12 @@ def run() -> None:
 
 CATALOGS = ("rzz", "rzzh", "rzzhn", "all")
 LABELS = {"rzz": "rzz", "rzzh": "rzzh", "rzzhn": "rzzhn", "all": "union"}
-ANGLES = (r"angle de l'entangleur — rzz : $x_i x_j$    "
-          r"rzzh : $(\pi - x_i)(\pi - x_j)$    "
-          r"rzzhn : $(\pi - x_i)(\pi - x_j) / 2\pi$    "
-          r"union : les trois au même catalogue")
-PROTOCOLS = (("exhaustive", common.BLUE, "optimum exact (8008 circuits)"),
-             ("mcts", common.RED, f"MCTS ({MCTS_ITERATIONS} itérations)"))
+ANGLES = (r"entangler angle — rzz: $x_i x_j$    "
+          r"rzzh: $(\pi - x_i)(\pi - x_j)$    "
+          r"rzzhn: $(\pi - x_i)(\pi - x_j) / 2\pi$    "
+          r"union: all three in one catalogue")
+PROTOCOLS = (("exhaustive", common.BLUE, "exact optimum (8008 circuits)"),
+             ("mcts", common.RED, f"MCTS ({MCTS_ITERATIONS} iterations)"))
 
 
 def plot() -> None:
@@ -129,9 +129,9 @@ def plot() -> None:
     fig, axes = plt.subplots(1, 3, figsize=(10.2, 3.0))
 
     for ax, column, title, ylabel, floor in (
-            (axes[0], "kta_train", "(a) alignement optimisé",
+            (axes[0], "kta_train", "(a) optimized alignment",
              "KTA (train)", None),
-            (axes[1], "r2_test", "(b) ce qu'il rapporte vraiment",
+            (axes[1], "r2_test", "(b) what it actually delivers",
              "$R^2$ test", -1.0)):
         below = 0
         for offset, (protocol, colour, label) in zip((-0.17, 0.17), PROTOCOLS):
@@ -175,7 +175,7 @@ def plot() -> None:
 
     ax = axes[2]
     width = 0.34
-    for offset, (protocol, colour, label) in zip((-width / 2, width / 2),
+    for offset, (protocol, colour, _label) in zip((-width / 2, width / 2),
                                                  PROTOCOLS):
         for i, catalog in enumerate(present):
             sub = df[(df["catalog"] == catalog) & (df["protocol"] == protocol)]
@@ -188,9 +188,9 @@ def plot() -> None:
     ax.set_xticks(range(len(present)))
     ax.set_xticklabels([LABELS[c] for c in present], fontsize=7.5)
     ax.set_ylim(0, len(SEEDS) * 1.25)
-    ax.set_ylabel(f"circuits sur {len(SEEDS)} gardant "
-                  "$\\geq 1$ entangleur")
-    ax.set_title("(c) l'entangleur est-il retenu ?")
+    ax.set_ylabel(f"circuits out of {len(SEEDS)} keeping "
+                  "$\\geq 1$ entangler")
+    ax.set_title("(c) is the entangler kept?")
     ax.grid(True, axis="y", alpha=0.5)
 
     fig.tight_layout()
@@ -266,7 +266,7 @@ def plot_circuits(df=None) -> None:
     }
 
     images = []
-    for (catalog, row) in rows:
+    for _catalog, row in rows:
         layer = _parse_detail(str(row["detail"]))
         qc = QuantumCircuit(N_QUBITS)
         full = (tuple(("h", (q,), None) for q in range(N_QUBITS)) + layer
@@ -294,11 +294,11 @@ def plot_circuits(df=None) -> None:
         ax.set_axis_off()
         ax.set_title(f"{LABELS[catalog]} — KTA {row['kta_train']:+.4f}   "
                      f"$R^2$ {row['r2_test']:+.3f}   "
-                     f"{int(row['n_entanglers'])} entangleur"
+                     f"{int(row['n_entanglers'])} entangler"
                      f"{'s' if int(row['n_entanglers']) > 1 else ''}",
                      fontsize=8, loc="left")
-    fig.suptitle(f"optimum exact du KTA sur MOF, graine {CIRCUIT_SEED} "
-                 f"({N_DATA_GATES} portes de données au plus)", fontsize=9)
+    fig.suptitle(f"exact KTA optimum on MOF, seed {CIRCUIT_SEED} "
+                 f"(at most {N_DATA_GATES} data gates)", fontsize=9)
     common.save_fig(fig, "fig_e10_rzz", formats=("png",))
     plt.close(fig)
 

@@ -1,3 +1,5 @@
+"""Datasets: the MOF adsorption table, synthetic benchmarks and the feature-to-angle scaler."""
+
 from __future__ import annotations
 
 from .base import BaseDataset, Dataset, RegressionDataset

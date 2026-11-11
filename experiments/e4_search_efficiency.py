@@ -46,9 +46,9 @@ def run() -> None:
     ktas = heuristic.evaluator.kta_many(states)
     i_opt = int(np.argmax(ktas))
     opt = float(ktas[i_opt])
-    print(f"optimum exhaustif : KTA {opt:+.4f} "
+    print(f"exhaustive optimum: KTA {opt:+.4f} "
           f"({describe(strip_identity(states[i_opt]))}) "
-          f"en {time.time() - t0:.1f}s")
+          f"in {time.time() - t0:.1f}s")
     common.write_csv(CSV_SPACE, [
         {"circuit_id": i, "n_gates": len(strip_identity(s)), "kta": float(k)}
         for i, (s, k) in enumerate(zip(states, ktas))])
@@ -64,7 +64,7 @@ def run() -> None:
                 "best_kta": best, "frac_of_opt": best / opt,
             })
         done = [r for r in rows if r["n_iterations"] == budget]
-        print(f"MCTS {budget:5d} it : frac moyenne "
+        print(f"MCTS {budget:5d} it: mean fraction of optimum "
               f"{np.mean([r['frac_of_opt'] for r in done]):.3f} "
               f"({time.time() - t0:.1f}s)")
 
@@ -77,7 +77,7 @@ def run() -> None:
 
     top = max(r["frac_of_opt"] for r in rows
               if r["strategy"] == "mcts" and r["n_iterations"] == 2000)
-    assert top > 0.999, f"MCTS 2000 n'atteint pas l'optimum : {top}"
+    assert top > 0.999, f"MCTS 2000 misses the optimum: {top}"
 
     common.write_csv(CSV, rows)
     common.write_meta("e4_search", time.time() - t0, n_qubits=N_QUBITS,

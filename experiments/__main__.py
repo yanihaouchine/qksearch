@@ -24,11 +24,11 @@ def resolve(args: list[str]) -> tuple[str, list[str]]:
     if not args:
         raise SystemExit(
             "usage: python -m experiments N [--plot-only]\n"
-            f"expériences : {', '.join(modules)}")
+            f"experiments: {', '.join(modules)}")
     key = args[0] if args[0].startswith("e") else f"e{args[0]}"
     if key not in modules:
-        raise SystemExit(f"expérience inconnue : {key!r} "
-                         f"(disponibles : {', '.join(modules)})")
+        raise SystemExit(f"unknown experiment: {key!r} "
+                         f"(available: {', '.join(modules)})")
     return modules[key], args[1:]
 
 
@@ -39,7 +39,7 @@ def main(args: list[str]) -> None:
         runpy.run_module(f"experiments.{module}", run_name="__main__")
     except ModuleNotFoundError as exc:
         raise SystemExit(
-            f"dépendance manquante : {exc.name}. Installer le projet avec\n"
+            f"missing dependency: {exc.name}. Install the project with\n"
             f'    pip install -e .') from exc
 
 

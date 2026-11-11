@@ -1,3 +1,10 @@
+"""Centered kernel alignment with a Gaussian target kernel, for regression.
+
+Both matrices are centered (``H K H`` with ``H = I - 11^T / n``, Cortes et al.,
+2012) so a constant offset in the kernel does not inflate the score. The
+target kernel is ``exp(-(y_i - y_j)^2 / 2 sigma^2)`` rather than ``y y^T``.
+"""
+
 from __future__ import annotations
 
 from typing import Optional
@@ -11,6 +18,14 @@ def _center(gram: np.ndarray) -> np.ndarray:
 
 
 class CenteredAlignment:
+    """Centered alignment between the Gram matrix and a Gaussian kernel on ``y``.
+
+    Parameters
+    ----------
+    sigma
+        Bandwidth of the target kernel; default: median of ``|y_i - y_j|``.
+    """
+
     def __init__(self, sigma: Optional[float] = None) -> None:
         if sigma is not None and sigma <= 0:
             raise ValueError("sigma must be > 0")
@@ -20,6 +35,7 @@ class CenteredAlignment:
         self._target_norm: float = 0.0
 
     def bandwidth(self, y: np.ndarray) -> float:
+        """``sigma`` if given, else the median pairwise distance of ``y``."""
         if self.sigma is not None:
             return float(self.sigma)
         yv = np.asarray(y, dtype=float).ravel()
@@ -33,6 +49,7 @@ class CenteredAlignment:
         return std if std > 0.0 else 1.0
 
     def target_kernel(self, y: np.ndarray) -> np.ndarray:
+        """Uncentered Gaussian kernel on the targets."""
         yv = np.asarray(y, dtype=float).ravel()
         sigma = self.bandwidth(yv)
         delta = yv[:, None] - yv[None, :]

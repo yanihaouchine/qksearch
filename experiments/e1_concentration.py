@@ -37,7 +37,7 @@ def run() -> None:
                     "var_offdiag": float(off.var()),
                     "mean_offdiag": float(off.mean()),
                 })
-        print(f"n={n} fait ({time.time() - t0:.1f}s)")
+        print(f"n={n} done ({time.time() - t0:.1f}s)")
     common.write_csv(CSV, rows)
     common.write_meta("e1_concentration", time.time() - t0,
                       qubits=QUBITS, depth_factors=list(DEPTH_FACTORS),

@@ -1,7 +1,7 @@
 import numpy as np
+
 from qksearch.backend import NumpyBackend
-from qksearch.enumerate_circuits import (MAX_DEPTH, N_QUBITS, enumerate_states,
-                                gate_set, sine_split)
+from qksearch.enumerate_circuits import MAX_DEPTH, N_QUBITS, enumerate_states, gate_set, sine_split
 from qksearch.iqp import IqpKernelHeuristic
 from qksearch.metric import TargetAlignment
 

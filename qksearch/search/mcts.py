@@ -1,3 +1,9 @@
+"""Monte Carlo tree search (UCT) with random rollouts.
+
+Scores are min-max normalized over everything observed so far, so the
+exploration constant does not depend on the scale of the objective.
+"""
+
 from __future__ import annotations
 
 import math
@@ -21,6 +27,20 @@ class _Node(Generic[S, E]):
 
 
 class MctsSearch(SearchStrategy[S, E]):
+    """UCT search: select by upper confidence bound, expand, roll out, back up.
+
+    Parameters
+    ----------
+    n_iterations
+        Number of select/expand/rollout/backup cycles.
+    exploration
+        UCT constant ``c`` in ``mean + c * sqrt(log N_parent / N_child)``.
+    rollout_depth
+        Maximum number of random moves per rollout (``None``: until a leaf).
+    seed
+        Seed of the generator used for rollouts and for picking the expanded child.
+    """
+
     def __init__(
         self,
         n_iterations: int = 1000,
@@ -37,7 +57,7 @@ class MctsSearch(SearchStrategy[S, E]):
         self.rollout_depth = rollout_depth
         self.rng = random.Random(seed)
 
-   
+
     def _observe(self, value: float) -> None:
         self._lo = min(self._lo, value)
         self._hi = max(self._hi, value)
@@ -53,10 +73,10 @@ class MctsSearch(SearchStrategy[S, E]):
         exploit = self._normalized(node.total / node.visits)
         return exploit + self.exploration * math.sqrt(log_parent_visits / node.visits)
 
-   
+
 
     def _expand_node(self, heuristic, node: _Node[S, E]) -> None:
-       
+
         node.expanded = True
         elements = self._expand(heuristic, node.state)
         if not elements:
@@ -69,7 +89,7 @@ class MctsSearch(SearchStrategy[S, E]):
             node.children.append(child)
 
     def _rollout(self, heuristic, state: S) -> float:
-       
+
         depth = 0
         limit = self.rollout_depth
         while not heuristic.is_complete(state):
@@ -92,7 +112,7 @@ class MctsSearch(SearchStrategy[S, E]):
             node.total += value
             node = node.parent
 
-   
+
     def search(self, initial, heuristic, *, budget=None):
         self._reset()
         self._lo, self._hi = float("inf"), float("-inf")
@@ -107,12 +127,12 @@ class MctsSearch(SearchStrategy[S, E]):
                 break
             node = root
 
-           
+
             while node.expanded and node.children:
                 log_n = math.log(max(node.visits, 1))
                 node = max(node.children, key=lambda c: self._uct(c, log_n))
 
-           
+
             if not node.expanded and not heuristic.is_complete(node.state):
                 self._expand_node(heuristic, node)
                 if node.children:

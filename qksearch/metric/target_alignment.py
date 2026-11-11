@@ -1,9 +1,17 @@
+"""Kernel-target alignment (Cristianini et al., 2001).
+
+``KTA(K, y) = <K, y y^T>_F / (||K||_F ||y y^T||_F)``, the cosine between the
+Gram matrix and the ideal kernel of the targets.
+"""
+
 from __future__ import annotations
 
 import numpy as np
 
 
 class TargetAlignment:
+    """Uncentered kernel-target alignment, in ``[-1, 1]``."""
+
     def __call__(self, gram: np.ndarray, y: np.ndarray) -> float:
         target = np.outer(y, y)
         denom = np.linalg.norm(gram) * np.linalg.norm(target)

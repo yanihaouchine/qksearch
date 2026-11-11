@@ -1,3 +1,11 @@
+"""Score a circuit by the quality of the fidelity kernel it induces.
+
+The kernel of a circuit ``U`` is ``k(x, x') = |<0|U(x)^dagger U(x')|0>|^2``.
+:class:`CircuitEvaluator` computes Gram matrices incrementally (a child
+circuit reuses its parent's statevectors) and in batches;
+:class:`QuantumKernelHeuristic` plugs it into the generic search interface.
+"""
+
 from __future__ import annotations
 
 from collections import OrderedDict
@@ -13,6 +21,8 @@ from qksearch.metric import Metric
 
 
 class StateRegularizer(Protocol):
+    """Score bonus computed from the circuit alone (e.g. its Lie algebra)."""
+
     needs_gram: ClassVar[bool] = False
 
     def __call__(self, state: State) -> float:
@@ -20,6 +30,8 @@ class StateRegularizer(Protocol):
 
 
 class GramRegularizer(Protocol):
+    """Score bonus computed from the Gram matrix (e.g. its spread)."""
+
     needs_gram: ClassVar[bool] = True
 
     def __call__(self, gram: np.ndarray) -> float:
@@ -33,6 +45,12 @@ Regularizer = Union[StateRegularizer, GramRegularizer]
 
 
 class DlaPenalty:
+    """Penalty ``-weight * dim(DLA) / (4**n - 1)`` on the dynamical Lie algebra.
+
+    A large DLA is linked to exponential kernel concentration, so this
+    favours circuits whose kernel values stay distinguishable.
+    """
+
     needs_gram = False
 
     def __init__(self, dla: DlaCalculator, n_qubits: int, weight: float = 1.0) -> None:
@@ -43,6 +61,7 @@ class DlaPenalty:
         self.dim_max = 4**n_qubits - 1
 
     def dimension(self, state: State) -> int:
+        """Dimension of the DLA of ``state``."""
         return self.dla.dimension(state)
 
     def __call__(self, state: State) -> float:
@@ -50,6 +69,12 @@ class DlaPenalty:
 
 
 class GramVarianceBonus:
+    """Bonus ``4 * weight * Var(K_ij, i < j)`` on the off-diagonal Gram entries.
+
+    Rewards kernels whose values are spread out rather than concentrated;
+    the factor 4 maps the maximum variance of values in ``[0, 1]`` to 1.
+    """
+
     needs_gram = True
 
     def __init__(self, weight: float = 0.5) -> None:
@@ -81,6 +106,20 @@ class GramVarianceBonus:
 
 
 class CircuitEvaluator:
+    """Gram matrices and metric values of ``prefix + state + suffix`` on a dataset.
+
+    Statevectors of recently seen states are kept in an LRU cache of
+    ``psi_cache_size`` entries, so scoring a child costs one gate application.
+    Metric values are memoized per state. A constant ``suffix`` (e.g. the final
+    Hadamard layer) is compiled once into a matrix.
+
+    Parameters
+    ----------
+    gram_feature
+        Optional :class:`GramRegularizer` evaluated on the same Gram matrix as
+        the metric, to avoid computing it twice.
+    """
+
     def __init__(self, backend: Backend, data: BaseDataset, metric: Metric,
                  prefix: State = (), suffix: State = (),
                  psi_cache_size: int = 4096,
@@ -130,6 +169,7 @@ class CircuitEvaluator:
         return self._suffix_matrix
 
     def states(self, state: State) -> np.ndarray:
+        """Statevectors after ``prefix + state``, one row per sample."""
         cached = self._psi.get(state)
         if cached is not None:
             self._psi.move_to_end(state)
@@ -154,6 +194,7 @@ class CircuitEvaluator:
         return psi
 
     def final_states(self, state: State) -> np.ndarray:
+        """Statevectors after the full circuit, suffix included."""
         psi = self.states(state)
         if not self.suffix:
             return psi
@@ -169,11 +210,13 @@ class CircuitEvaluator:
         return self.prefix + state + self.suffix
 
     def gram(self, state: State) -> np.ndarray:
+        """Training Gram matrix of the circuit, shape ``(n_samples, n_samples)``."""
         if self._incremental:
             return self.backend.gram_from_states(self.final_states(state))
         return self.backend.gram(self.circuit(state), self.data.X)
 
     def kta(self, state: State) -> float:
+        """Metric value of ``state``, memoized (named after the default metric, the KTA)."""
         cached = self._scores.get(state)
         if cached is not None:
             return cached
@@ -185,6 +228,7 @@ class CircuitEvaluator:
         return value
 
     def feature(self, state: State) -> float:
+        """Value of ``gram_feature`` for ``state`` (0 if there is none)."""
         cached = self._features.get(state)
         if cached is not None:
             return cached
@@ -194,6 +238,7 @@ class CircuitEvaluator:
         return value
 
     def kta_many(self, states: Sequence[State]) -> np.ndarray:
+        """Batched :meth:`kta`: one stacked Gram computation for all uncached states."""
         out = np.empty(len(states), dtype=float)
         pending: list[int] = []
         for i, s in enumerate(states):
@@ -221,6 +266,25 @@ class CircuitEvaluator:
 
 
 class QuantumKernelHeuristic:
+    """Search problem: grow a circuit gate by gate, score = metric + regularizer.
+
+    Parameters
+    ----------
+    gate_set
+        Which gates can be added (see :mod:`qksearch.gates`).
+    backend
+        Statevector simulator (see :mod:`qksearch.backend`).
+    data
+        Training set on which the Gram matrix is computed.
+    metric
+        Gram-matrix score to maximize (see :mod:`qksearch.metric`).
+    max_depth
+        Number of gates at which a circuit is complete.
+    regularizer
+        Optional :class:`StateRegularizer` or :class:`GramRegularizer` added
+        to the metric.
+    """
+
     prefix: State = ()
     suffix: State = ()
 
@@ -255,6 +319,7 @@ class QuantumKernelHeuristic:
 
     @property
     def evaluator(self) -> CircuitEvaluator:
+        """Lazily built :class:`CircuitEvaluator` shared by all scores."""
         if self._evaluator is None:
             reg = self.regularizer
             self._evaluator = CircuitEvaluator(
@@ -268,6 +333,7 @@ class QuantumKernelHeuristic:
         return self.gate_set.placements(state)
 
     def free_candidates(self, state: State) -> Sequence[GateOp]:
+        """Candidates ignoring the canonical order (for path-following strategies)."""
         if len(state) >= self.max_depth:
             return []
         free = getattr(self.gate_set, "free_placements", None)
@@ -281,9 +347,11 @@ class QuantumKernelHeuristic:
         return self.prefix + state + self.suffix
 
     def kta(self, state: State) -> float:
+        """Metric term of the score, without the regularizer."""
         return self.evaluator.kta(state)
 
     def regularization(self, state: State) -> float:
+        """Regularizer term of the score, memoized."""
         reg = self.regularizer
         if reg is None:
             return 0.0
@@ -295,9 +363,11 @@ class QuantumKernelHeuristic:
         return cached
 
     def score(self, state: State) -> float:
+        """``metric(K) + regularization``; this is what the search maximizes."""
         return self.kta(state) + self.regularization(state)
 
     def scores(self, states: Sequence[State]) -> np.ndarray:
+        """Batched :meth:`score`, used by strategies that score all children at once."""
         values = self.evaluator.kta_many(states)
         if self.regularizer is None:
             return values
@@ -308,6 +378,8 @@ class QuantumKernelHeuristic:
 
 
 class KtaDlaHeuristic(QuantumKernelHeuristic):
+    """:class:`QuantumKernelHeuristic` with a :class:`DlaPenalty` regularizer."""
+
     def __init__(
         self,
         gate_set: GateSet,
