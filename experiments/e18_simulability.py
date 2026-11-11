@@ -16,6 +16,7 @@ CHUNK_SIZE = 256
 FILTER_WEIGHT = 100.0
 CIRCUIT_METHOD = "l2pf"
 CIRCUIT_SEED = 6
+ALPHAS = tuple(np.logspace(-4, 1, 16))
 
 OBJECTIVES = {
     "kta": ("KTA", common.BLUE),
@@ -63,7 +64,7 @@ def _metric(objective: str):
 
     if objective == "kta":
         return TargetAlignment()
-    return RidgeLooMse(alphas=(common.RIDGE_ALPHA,))
+    return RidgeLooMse(alphas=ALPHAS)
 
 
 def build_heuristic(objective: str, method: str, train):
@@ -107,13 +108,13 @@ def measure(states, train, test) -> dict[str, np.ndarray]:
     h = hadamard_layer(N_QUBITS)
     evaluator = _evaluator(joint, cache=512)
     alignment = TargetAlignment()
-    loo = RidgeLooMse(alphas=(common.RIDGE_ALPHA,))
+    loo = RidgeLooMse(alphas=ALPHAS)
+    alphas = np.asarray(ALPHAS)
     n = train.n_samples
     idx = np.arange(n)
-    ridge = common.RIDGE_ALPHA * np.eye(n)
     total = float(((test.y - test.y.mean()) ** 2).mean())
 
-    out = {name: np.empty(len(states)) for name in ("kta", "mse", "r2_test")}
+    out = {name: np.empty(len(states)) for name in ("kta", "mse", "alpha", "r2_test")}
     for start in range(0, len(states), CHUNK_SIZE):
         block = slice(start, start + CHUNK_SIZE)
         psis = np.stack([evaluator.final_states(s) for s in states[block]])
@@ -122,7 +123,11 @@ def measure(states, train, test) -> dict[str, np.ndarray]:
         K = grams[:, :n]
         K[:, idx, idx] = 1.0
         out["kta"][block] = alignment.batch(K, train.y)
-        out["mse"][block] = loo.batch(K, train.y)
+        errors = loo.loo_mse(K, train.y)
+        best = errors.argmin(axis=1)
+        out["mse"][block] = -errors.min(axis=1) / train.y.var()
+        out["alpha"][block] = alphas[best]
+        ridge = alphas[best][:, None, None] * np.eye(n)
         coef = np.linalg.solve(K + ridge, train.y[:, None])
         pred = (grams[:, n:] @ coef)[..., 0]
         out["r2_test"][block] = 1.0 - ((pred - test.y) ** 2).mean(axis=1) / total
@@ -166,6 +171,7 @@ def run(budget: int) -> None:
                 "certificate": values["category"][i],
                 "kta": float(values["kta"][i]),
                 "loo_r2": float(1.0 + values["mse"][i]),
+                "alpha": float(values["alpha"][i]),
                 "r2_test": float(values["r2_test"][i]),
                 "magic": float(m2),
                 "n_gates": sum(op[0] != "hl" for op in best),
@@ -201,7 +207,7 @@ def run(budget: int) -> None:
 
     common.write_meta("e18_simulability", time.time() - t0, seeds=SEEDS,
                       n_qubits=N_QUBITS, max_depth=MAX_DEPTH, budget=budget,
-                      filter_weight=FILTER_WEIGHT, ridge_alpha=common.RIDGE_ALPHA,
+                      filter_weight=FILTER_WEIGHT, alphas=list(ALPHAS),
                       summary=summary)
 
 
